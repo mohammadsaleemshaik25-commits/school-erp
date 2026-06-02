@@ -1,3 +1,5 @@
+@include('partials.module-nav')
+
 <h1>Add Student</h1>
 
 <a href="/students">

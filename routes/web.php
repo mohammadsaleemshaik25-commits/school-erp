@@ -1,9 +1,12 @@
 <?php
 
 use App\Http\Controllers\AcademicYearController;
+use App\Http\Controllers\AdmissionRegisterController;
 use App\Http\Controllers\Api\StudentApiController;
+use App\Http\Controllers\ClassController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PromotionController;
+use App\Http\Controllers\SectionController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\StudentDocumentController;
 use App\Http\Controllers\StudentEnrollmentController;
@@ -11,13 +14,14 @@ use App\Http\Controllers\StudentExportController;
 use App\Http\Controllers\TransferCertificateController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return "Laravel is working!";
-});
+Route::view('/', 'home');
 
 Route::get('/students', [StudentController::class, 'index']);
 Route::get('/students/create', [StudentController::class, 'create']);
 Route::post('/students', [StudentController::class, 'store']);
+Route::get('/students/{student}/edit', [StudentController::class, 'edit']);
+Route::put('/students/{student}', [StudentController::class, 'update']);
+Route::get('/students/{student}/history', [StudentController::class, 'history']);
 Route::get('/students/{student}/documents', [StudentDocumentController::class, 'index']);
 Route::post('/students/{student}/documents', [StudentDocumentController::class, 'store']);
 Route::get('/students/{student}/enrollments', [StudentEnrollmentController::class, 'index']);
@@ -53,3 +57,17 @@ Route::post(
 
 Route::get('/promotions', [PromotionController::class, 'index']);
 Route::post('/promotions', [PromotionController::class, 'store']);
+
+Route::get('/admissions/register', [AdmissionRegisterController::class, 'index']);
+
+Route::get('/classes', [ClassController::class, 'index']);
+Route::get('/classes/create', [ClassController::class, 'create']);
+Route::post('/classes', [ClassController::class, 'store']);
+Route::get('/classes/{class}/edit', [ClassController::class, 'edit']);
+Route::put('/classes/{class}', [ClassController::class, 'update']);
+
+Route::get('/sections', [SectionController::class, 'index']);
+Route::get('/sections/create', [SectionController::class, 'create']);
+Route::post('/sections', [SectionController::class, 'store']);
+Route::get('/sections/{section}/edit', [SectionController::class, 'edit']);
+Route::put('/sections/{section}', [SectionController::class, 'update']);

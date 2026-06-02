@@ -1,3 +1,5 @@
+@include('partials.module-nav')
+
 <h1>Student Profile</h1>
 
 <a href="/students">
@@ -26,6 +28,18 @@
 
 <a href="/students/{{ $student->student_id }}/id-card">
     Generate ID Card
+</a>
+
+ |
+
+<a href="/students/{{ $student->student_id }}/history">
+    Student History
+</a>
+
+ |
+
+<a href="/students/{{ $student->student_id }}/edit">
+    Edit Student
 </a>
 
 <br><br>

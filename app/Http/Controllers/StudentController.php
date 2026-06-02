@@ -54,6 +54,36 @@ class StudentController extends Controller
         return redirect('/students');
     }
 
+    public function edit(Student $student)
+    {
+        return view('students.edit', compact('student'));
+    }
+
+    public function update(Request $request, Student $student)
+    {
+        $validated = $request->validate([
+            'admission_no' => ['required', 'string', 'max:30', 'unique:students,admission_no,' . $student->student_id . ',student_id'],
+            'pen_no' => ['required', 'string', 'max:30', 'unique:students,pen_no,' . $student->student_id . ',student_id'],
+            'aadhaar_no' => ['required', 'string', 'max:20', 'unique:students,aadhaar_no,' . $student->student_id . ',student_id'],
+            'student_name' => ['required', 'string', 'max:100'],
+            'dob' => ['required', 'date'],
+            'gender' => ['required', 'string', 'max:10'],
+            'father_name' => ['required', 'string', 'max:100'],
+            'mother_name' => ['nullable', 'string', 'max:100'],
+            'guardian_name' => ['nullable', 'string', 'max:100'],
+            'phone_primary' => ['nullable', 'string', 'max:15'],
+            'phone_secondary' => ['nullable', 'string', 'max:15'],
+            'email' => ['nullable', 'email', 'max:100'],
+            'address' => ['nullable', 'string'],
+            'admission_date' => ['required', 'date'],
+            'status' => ['required', 'string', 'max:20'],
+        ]);
+
+        $student->update($validated);
+
+        return redirect("/students/{$student->student_id}");
+    }
+
     public function show(Student $student)
     {
         $enrollmentHistory = $student->enrollments()
@@ -64,6 +94,18 @@ class StudentController extends Controller
             ->get();
 
         return view('students.show', compact('student', 'enrollmentHistory'));
+    }
+
+    public function history(Student $student)
+    {
+        $enrollmentHistory = $student->enrollments()
+            ->with(['academicYear', 'classRoom', 'section'])
+            ->join('academic_years', 'student_enrollments.academic_year_id', '=', 'academic_years.academic_year_id')
+            ->orderBy('academic_years.start_date')
+            ->select('student_enrollments.*')
+            ->get();
+
+        return view('students.history', compact('student', 'enrollmentHistory'));
     }
 
     public function idCard(Student $student)
