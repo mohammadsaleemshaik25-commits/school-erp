@@ -1,59 +1,73 @@
-@extends('layouts.app')
+@extends('fees.layout')
+
+@section('title', 'Daily Revenue Collection')
 
 @section('content')
-<div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-    <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-semibold text-gray-900">Daily Revenue collection</h1>
-        <form action="{{ route('reports.daily') }}" method="GET" class="flex gap-2 items-center">
-            <input type="date" name="date" value="{{ $dateStr }}" class="rounded border-gray-300 text-sm">
-            <button type="submit" class="bg-indigo-600 text-white text-sm px-4 py-2 rounded hover:bg-indigo-700">Filter Date</button>
-        </form>
-    </div>
+<div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+    <h1 class="h3 mb-0 text-gray-800">Daily Revenue Collection</h1>
+    <form action="{{ route('reports.daily') }}" method="GET" class="d-flex gap-2 align-items-center">
+        <input type="date" name="date" value="{{ $dateStr }}" class="form-control form-control-sm shadow-sm">
+        <button type="submit" class="btn btn-primary btn-sm shadow-sm">
+            <i class="bi bi-filter me-1"></i> Filter Date
+        </button>
+    </form>
+</div>
 
-    <!-- Summary Box -->
-    <div class="bg-indigo-800 text-white rounded-lg p-6 mb-6 shadow-md flex justify-between items-center">
+<!-- Summary Card -->
+<div class="card bg-primary text-white shadow-sm mb-4">
+    <div class="card-body d-flex justify-content-between align-items-center py-4">
         <div>
-            <h3 class="text-lg opacity-80">Total Collections Recorded for {{ \Carbon\Carbon::parse($dateStr)->format('d F Y') }}</h3>
-            <p class="text-3xl font-extrabold font-mono mt-1">₹{{ number_format($totalCollected, 2) }}</p>
+            <h6 class="text-white-50 text-uppercase small fw-bold mb-1">Total Collections Recorded for {{ \Carbon\Carbon::parse($dateStr)->format('d F Y') }}</h6>
+            <p class="h2 fw-extrabold font-monospace mb-0">₹{{ number_format($totalCollected, 2) }}</p>
         </div>
-        <button onclick="window.print()" class="bg-white text-indigo-800 font-semibold text-sm px-4 py-2 rounded hover:bg-gray-100">Print Report</button>
+        <button onclick="window.print()" class="btn btn-light btn-sm fw-bold shadow-sm d-print-none">
+            <i class="bi bi-printer me-1"></i> Print Report
+        </button>
     </div>
+</div>
 
-    <div class="bg-white shadow overflow-hidden sm:rounded-lg">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
+<div class="card shadow-sm">
+    <div class="card-header bg-white py-3">
+        <h6 class="m-0 font-weight-bold text-primary small text-uppercase">Collection Log</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
                 <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Receipt No</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
-                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Payment Mode</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recorded By</th>
-                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                    <th class="small fw-bold text-muted text-uppercase px-4">Receipt No</th>
+                    <th class="small fw-bold text-muted text-uppercase">Student</th>
+                    <th class="small fw-bold text-muted text-uppercase text-center">Mode</th>
+                    <th class="small fw-bold text-muted text-uppercase">Recorded By</th>
+                    <th class="small fw-bold text-muted text-uppercase text-end px-4">Amount</th>
                 </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200 text-sm font-mono">
+            <tbody class="font-monospace small">
                 @forelse($payments as $p)
                     <tr>
-                        <td class="px-6 py-4 font-bold text-indigo-600">
+                        <td class="px-4 fw-bold text-primary">
                             {{ $p->receipt->receipt_number ?? 'N/A' }}
                         </td>
-                        <td class="px-6 py-4 font-sans font-semibold">
-                            {{ $p->feeAccount->student->first_name }}
+                        <td class="font-sans fw-semibold">
+                            {{ $p->feeAccount->student->student_name }}
                         </td>
-                        <td class="px-6 py-4 text-center">
-                            <span class="px-2 py-0.5 rounded text-xs {{ $p->payment_mode === 'UPI' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800' }}">
+                        <td class="text-center">
+                            <span class="badge rounded-pill {{ $p->payment_mode === 'UPI' ? 'bg-info-subtle text-info border border-info' : 'bg-success-subtle text-success border border-success' }}">
                                 {{ $p->payment_mode }}
                             </span>
                         </td>
-                        <td class="px-6 py-4 font-sans text-xs">
-                            {{ $p->collector->name }}
+                        <td class="font-sans text-muted">
+                            {{ $p->collector->full_name ?? $p->collector->username }}
                         </td>
-                        <td class="px-6 py-4 text-right font-bold">
+                        <td class="text-end fw-bold px-4">
                             ₹{{ number_format($p->amount, 2) }}
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="px-6 py-8 text-center text-gray-500 font-sans">No collections logged for this date.</td>
+                        <td colspan="5" class="text-center py-5 text-muted font-sans">
+                            <i class="bi bi-calendar-x h1 d-block mb-2"></i>
+                            No collections recorded for this date.
+                        </td>
                     </tr>
                 @endforelse
             </tbody>

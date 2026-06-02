@@ -1,248 +1,404 @@
-@extends('layouts.app')
+@extends('fees.layout')
+
+@section('title', 'Fee Collection')
 
 @section('content')
-<div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-    <div class="flex justify-between items-center mb-6 border-b pb-4">
-        <h1 class="text-2xl font-semibold text-gray-900">Fee Payment Desk</h1>
-        @if($account)
-            <a href="{{ route('fees.collect') }}" class="text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1.5 rounded font-medium transition">
-                &larr; Back to Search
-            </a>
-        @endif
+@php
+    $todayCollection = \App\Models\Payment::whereDate('payment_date', today())->where('status', '!=', 'CANCELLED')->sum('amount');
+    $clerkReceipts = \App\Models\Payment::whereDate('payment_date', today())->where('collected_by', auth()->id())->count();
+    $cancelledReceipts = \App\Models\Payment::whereDate('payment_date', today())->where('status', 'CANCELLED')->count();
+    $totalPending = \App\Models\StudentFeeAccount::sum('total_due') - \App\Models\StudentFeeAccount::sum('total_paid');
+@endphp
+
+<div class="mb-4">
+    <div class="row g-3">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm bg-primary text-white h-100 overflow-hidden position-relative">
+                <div class="card-body p-3">
+                    <div class="small text-uppercase fw-bold opacity-75 mb-2" style="font-size: 0.7rem; letter-spacing: 0.5px;">Today's Collection</div>
+                    <div class="h4 fw-bold mb-0">₹{{ number_format($todayCollection, 2) }}</div>
+                    <i class="bi bi-currency-rupee position-absolute end-0 bottom-0 opacity-25" style="font-size: 4rem; margin-right: -10px; margin-bottom: -15px;"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm bg-white h-100 overflow-hidden position-relative border-start border-success border-4">
+                <div class="card-body p-3">
+                    <div class="small text-uppercase fw-bold text-muted mb-2" style="font-size: 0.7rem; letter-spacing: 0.5px;">My Receipts (Today)</div>
+                    <div class="h4 fw-bold mb-0 text-success">{{ $clerkReceipts }}</div>
+                    <i class="bi bi-receipt position-absolute end-0 bottom-0 text-success opacity-10" style="font-size: 4rem; margin-right: -10px; margin-bottom: -15px;"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm bg-white h-100 overflow-hidden position-relative border-start border-danger border-4">
+                <div class="card-body p-3">
+                    <div class="small text-uppercase fw-bold text-muted mb-2" style="font-size: 0.7rem; letter-spacing: 0.5px;">Cancelled Receipts</div>
+                    <div class="h4 fw-bold mb-0 text-danger">{{ $cancelledReceipts }}</div>
+                    <i class="bi bi-x-circle position-absolute end-0 bottom-0 text-danger opacity-10" style="font-size: 4rem; margin-right: -10px; margin-bottom: -15px;"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm bg-white h-100 overflow-hidden position-relative border-start border-warning border-4">
+                <div class="card-body p-3">
+                    <div class="small text-uppercase fw-bold text-muted mb-2" style="font-size: 0.7rem; letter-spacing: 0.5px;">Total Outstanding</div>
+                    <div class="h4 fw-bold mb-0 text-warning">₹{{ number_format($totalPending, 2) }}</div>
+                    <i class="bi bi-exclamation-triangle position-absolute end-0 bottom-0 text-warning opacity-10" style="font-size: 4rem; margin-right: -10px; margin-bottom: -15px;"></i>
+                </div>
+            </div>
+        </div>
     </div>
+</div>
 
-    @if(session('success'))
-        <div class="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
-            {{ session('success') }}
-        </div>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h4 mb-0 fw-bold text-dark">
+        @if($account)
+            <span class="text-muted fw-normal">Ledger For:</span> {{ $account->student->student_name }}
+        @else
+            Fee Collection Desk
+        @endif
+    </h1>
+    @if($account)
+        <a href="{{ route('fees.collect') }}" class="btn btn-outline-secondary btn-sm shadow-sm px-3 rounded-pill">
+            <i class="bi bi-arrow-left me-2"></i> Back to Search
+        </a>
     @endif
+</div>
 
-    @if($errors->any())
-        <div class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-            <ul class="list-disc pl-5 text-sm">
-                @foreach ($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
+@if(session('success'))
+    <div class="alert alert-success border-0 shadow-sm alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>
+        {{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+@endif
+
+@if($errors->any())
+    <div class="alert alert-danger border-0 shadow-sm alert-dismissible fade show" role="alert">
+        <ul class="mb-0 small">
+            @foreach ($errors->all() as $error)
+                <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+@endif
+
+<!-- Improved Student Search Panel -->
+@if(!$account)
+    <div class="card border-0 shadow-sm mb-4 rounded-4 overflow-hidden">
+        <div class="card-header bg-white border-bottom py-3">
+            <div class="d-flex align-items-center">
+                <div class="bg-primary bg-opacity-10 p-2 rounded-3 me-3">
+                    <i class="bi bi-search text-primary"></i>
+                </div>
+                <h6 class="m-0 fw-bold text-dark">Search Student Ledger</h6>
+            </div>
         </div>
-    @endif
-
-    <!-- Standard Multi-Field Student Search Panel -->
-    @if(!$account)
-        <div class="bg-white shadow overflow-hidden sm:rounded-lg p-6 mb-6 border">
-            <h2 class="text-md font-bold text-gray-800 mb-4 uppercase tracking-wider">Search Student Dues</h2>
-            <form action="{{ route('fees.collect') }}" method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Admission Number</label>
-                    <input type="text" name="admission_no" value="{{ request('admission_no') }}" placeholder="e.g. ADM-2026-01"
-                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+        <div class="card-body p-4">
+            <form action="{{ route('fees.collect') }}" method="GET">
+                <div class="row g-4">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase mb-2">Admission No.</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-hash"></i></span>
+                            <input type="text" name="admission_no" value="{{ request('admission_no') }}" placeholder="e.g. ADM-2026-01" class="form-control border-start-0 ps-0">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase mb-2">Student Name</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-person"></i></span>
+                            <input type="text" name="student_name" value="{{ request('student_name') }}" placeholder="e.g. Rahul" class="form-control border-start-0 ps-0">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold text-muted text-uppercase mb-2">Class</label>
+                        <select name="class_id" class="form-select form-select-sm shadow-none">
+                            <option value="">All Classes</option>
+                            @foreach($classes as $cls)
+                                <option value="{{ $cls->class_id }}" {{ request('class_id') == $cls->class_id ? 'selected' : '' }}>
+                                    {{ $cls->class_name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold text-muted text-uppercase mb-2">Section</label>
+                        <select name="section_id" class="form-select form-select-sm shadow-none">
+                            <option value="">All Sections</option>
+                            @foreach($sections as $sec)
+                                <option value="{{ $sec->section_id }}" {{ request('section_id') == $sec->section_id ? 'selected' : '' }}>
+                                    {{ $sec->section_name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold text-muted text-uppercase mb-2">Academic Year</label>
+                        <select name="academic_year_id" class="form-select form-select-sm shadow-none">
+                            @php $academicYears = \App\Models\AcademicYear::orderBy('year_name', 'desc')->get(); @endphp
+                            @foreach($academicYears as $year)
+                                <option value="{{ $year->academic_year_id }}" {{ request('academic_year_id', \App\Models\AcademicYear::where('is_active', true)->first()?->academic_year_id) == $year->academic_year_id ? 'selected' : '' }}>
+                                    {{ $year->year_name }} {{ $year->is_active ? '(Active)' : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Student Name</label>
-                    <input type="text" name="student_name" value="{{ request('student_name') }}" placeholder="e.g. Rahul"
-                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Class</label>
-                    <select name="class_id" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                        <option value="">-- Select Class --</option>
-                        @foreach($classes as $cls)
-                            <option value="{{ $cls->class_id }}" {{ request('class_id') == $cls->class_id ? 'selected' : '' }}>
-                                {{ $cls->class_name }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Section</label>
-                    <select name="section_id" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                        <option value="">-- Select Section --</option>
-                        @foreach($sections as $sec)
-                            <option value="{{ $sec->section_id }}" {{ request('section_id') == $sec->section_id ? 'selected' : '' }}>
-                                {{ $sec->section_name }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="md:col-span-4 flex justify-end">
-                    <button type="submit" class="bg-indigo-900 hover:bg-indigo-800 text-white font-bold py-2 px-6 rounded text-sm transition shadow">
-                        Find Student Ledger
+                <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
+                    <p class="small text-muted mb-0"><i class="bi bi-info-circle me-1"></i> Fill any field to start searching for student accounts.</p>
+                    <button type="submit" class="btn btn-primary px-5 shadow-sm rounded-pill">
+                        <i class="bi bi-search me-2"></i> Search Accounts
                     </button>
                 </div>
             </form>
         </div>
+    </div>
 
-        <!-- Render Search Results Table -->
-        @if($searchResults)
-            <div class="bg-white shadow overflow-hidden sm:rounded-lg border">
-                <div class="px-4 py-3 bg-gray-50 border-b">
-                    <h3 class="text-sm font-bold text-gray-700">Matching Student Records</h3>
-                </div>
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-100">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Admission No</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Name</th>
-                            <th class="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Outstanding Due</th>
-                            <th class="px-6 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Status</th>
-                            <th class="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Action</th>
+    <!-- Render Search Results Card -->
+    @if($searchResults)
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+            <div class="card-header bg-white border-bottom py-3">
+                <h6 class="m-0 fw-bold text-dark">Matching Student Records ({{ $searchResults->total() }})</h6>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr class="small text-uppercase fw-bold text-muted" style="letter-spacing: 0.5px;">
+                            <th class="px-4 py-3">Student Details</th>
+                            <th class="py-3">Parents</th>
+                            <th class="py-3">Class/Section</th>
+                            <th class="py-3 text-end">Outstanding Due</th>
+                            <th class="py-3 text-center">Status</th>
+                            <th class="px-4 py-3 text-end">Action</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-200 text-sm">
+                    <tbody>
                         @forelse($searchResults as $res)
                             <tr>
-                                <td class="px-6 py-4 font-mono font-bold text-gray-800">{{ $res->student->admission_no }}</td>
-                                <td class="px-6 py-4 font-semibold text-gray-900">{{ $res->student->student_name }}</td>
-                                <td class="px-6 py-4 text-right font-mono font-bold text-indigo-900">₹{{ number_format($res->remaining_balance, 2) }}</td>
-                                <td class="px-6 py-4 text-center">
-                                    <span class="px-2.5 py-1 text-xs font-semibold rounded-full 
-                                        {{ $res->status === 'PAID' ? 'bg-green-100 text-green-800' : ($res->status === 'PARTIALLY_PAID' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800') }}">
+                                <td class="px-4">
+                                    <div class="fw-bold text-dark">{{ $res->student->student_name }}</div>
+                                    <div class="small text-muted font-monospace">{{ $res->student->admission_no }}</div>
+                                </td>
+                                <td>
+                                    <div class="small"><span class="text-muted">F:</span> {{ $res->student->father_name ?? 'N/A' }}</div>
+                                    <div class="small"><span class="text-muted">M:</span> {{ $res->student->mother_name ?? 'N/A' }}</div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border fw-normal">{{ optional($res->classRoom)->class_name ?? '-' }}</span>
+                                    <span class="badge bg-light text-dark border fw-normal">{{ optional($res->section)->section_name ?? '-' }}</span>
+                                </td>
+                                <td class="text-end fw-bold text-primary font-monospace">₹{{ number_format($res->remaining_balance, 2) }}</td>
+                                <td class="text-center">
+                                    <span class="badge rounded-pill py-1 px-3 
+                                        {{ $res->status === 'PAID' ? 'bg-success-subtle text-success border border-success' : ($res->status === 'PARTIALLY_PAID' ? 'bg-warning-subtle text-warning border border-warning' : 'bg-danger-subtle text-danger border border-danger') }}">
                                         {{ $res->status }}
                                     </span>
                                 </td>
-                                <td class="px-6 py-4 text-right">
-                                    <a href="{{ route('fees.collect', ['student_fee_account_id' => $res->id]) }}"
-                                       class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded text-xs transition">
+                                <td class="px-4 text-end">
+                                    <a href="{{ route('fees.collect', ['student_fee_account_id' => $res->id]) }}" class="btn btn-primary btn-sm rounded-pill shadow-sm px-3">
                                         Collect Payment
                                     </a>
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-6 py-8 text-center text-gray-500">No student accounts matched your criteria.</td>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="bi bi-search fs-1 d-block mb-3 opacity-25"></i>
+                                    No student accounts matched your criteria.
+                                </td>
                             </tr>
                         @endforelse
                     </tbody>
                 </table>
-                <div class="px-6 py-4 border-t">
+            </div>
+            @if($searchResults->hasPages())
+                <div class="card-footer bg-white border-top py-3">
                     {{ $searchResults->links() }}
                 </div>
-            </div>
-        @endif
-    @else
-        <!-- Specific Checkout Ledger Screen (Shown when student is loaded) -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="lg:col-span-2 bg-white shadow overflow-hidden sm:rounded-lg p-6 border">
-                <div class="flex justify-between items-center border-b border-gray-200 pb-4 mb-4">
-                    <h2 class="text-lg font-bold text-gray-800">Ledger Statement</h2>
-                    <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
-                        {{ $account->status === 'PAID' ? 'bg-green-100 text-green-800' : ($account->status === 'PARTIALLY_PAID' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800') }}">
+            @endif
+        </div>
+    @endif
+@else
+    <!-- Specific Checkout Ledger Screen -->
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-primary bg-opacity-10 p-2 rounded-3 me-3">
+                            <i class="bi bi-journal-text text-primary"></i>
+                        </div>
+                        <h6 class="m-0 fw-bold text-dark">Ledger Statement</h6>
+                    </div>
+                    <span class="badge rounded-pill py-1 px-3 
+                        {{ $account->status === 'PAID' ? 'bg-success-subtle text-success border border-success' : ($account->status === 'PARTIALLY_PAID' ? 'bg-warning-subtle text-warning border border-warning' : 'bg-danger-subtle text-danger border border-danger') }}">
                         {{ $account->status }}
                     </span>
                 </div>
-
-                <div class="grid grid-cols-2 gap-4 mb-6">
-                    <div>
-                        <p class="text-xs text-gray-500 uppercase font-semibold">Student Name</p>
-                        <p class="font-bold text-gray-800">{{ $account->student->student_name }}</p>
+                <div class="card-body p-4">
+                    <div class="row mb-4 p-3 bg-light rounded-4">
+                        <div class="col-sm-4 border-end">
+                            <label class="small fw-bold text-muted text-uppercase d-block mb-1" style="font-size: 0.65rem;">Student Name</label>
+                            <span class="h6 fw-bold text-dark mb-0">{{ $account->student->student_name }}</span>
+                        </div>
+                        <div class="col-sm-4 border-end">
+                            <label class="small fw-bold text-muted text-uppercase d-block mb-1" style="font-size: 0.65rem;">Admission No.</label>
+                            <span class="h6 fw-bold font-monospace text-dark mb-0">{{ $account->student->admission_no }}</span>
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="small fw-bold text-muted text-uppercase d-block mb-1" style="font-size: 0.65rem;">Class / Section</label>
+                            <span class="h6 fw-bold text-dark mb-0">{{ optional($account->classRoom)->class_name }} / {{ optional($account->section)->section_name }}</span>
+                        </div>
                     </div>
-                    <div>
-                        <p class="text-xs text-gray-500 uppercase font-semibold">Admission No.</p>
-                        <p class="font-mono font-bold text-gray-800">{{ $account->student->admission_no }}</p>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered align-middle">
+                            <thead class="bg-light text-center">
+                                <tr class="small text-uppercase fw-bold text-muted">
+                                    <th class="py-2">Fee Description</th>
+                                    <th class="py-2 text-end px-3">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-3 py-3">Tuition Fee (Standard)</td>
+                                    <td class="px-3 py-3 text-end font-monospace">₹{{ number_format($account->tuition_fee, 2) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-3 py-3">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span>Books Fee Applied</span>
+                                            <form action="{{ route('fees.books.update', $account->id) }}" method="POST" class="d-flex gap-2">
+                                                @csrf
+                                                @method('PUT')
+                                                <input type="number" name="books_fee_applied" value="{{ (int)$account->books_fee_applied }}" class="form-control form-control-sm py-0 px-2 text-end rounded-pill" style="width: 80px;">
+                                                <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none fw-bold" style="font-size: 0.75rem;">Update</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                    <td class="px-3 py-3 text-end font-monospace">₹{{ number_format($account->books_fee_applied, 2) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-3 py-3 text-muted italic">Previous Years Balance Carried</td>
+                                    <td class="px-3 py-3 text-end font-monospace text-danger">₹{{ number_format($account->previous_balance_carried, 2) }}</td>
+                                </tr>
+                                <tr class="table-success border-success bg-opacity-10 text-success fw-bold">
+                                    <td class="px-3 py-3">Approved Concessions (-)</td>
+                                    <td class="px-3 py-3 text-end font-monospace">₹{{ number_format($account->concession_amount, 2) }}</td>
+                                </tr>
+                                <tr class="fw-bold bg-light">
+                                    <td class="px-3 py-3 h6 mb-0">Total Due Outstanding</td>
+                                    <td class="px-3 py-3 text-end font-monospace h6 mb-0">₹{{ number_format($account->total_due, 2) }}</td>
+                                </tr>
+                                <tr class="text-muted small">
+                                    <td class="px-3 py-2">Total Fees Paid to Date</td>
+                                    <td class="px-3 py-2 text-end font-monospace text-success">₹{{ number_format($account->total_paid, 2) }}</td>
+                                </tr>
+                                <tr class="border-top border-dark border-3">
+                                    <td class="px-3 py-4 h5 fw-bold mb-0 text-uppercase" style="letter-spacing: 1px;">Net Balance Remaining</td>
+                                    <td class="px-3 py-4 h4 fw-bold text-primary font-monospace mb-0 text-end">₹{{ number_format($account->remaining_balance, 2) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-
-                <table class="min-w-full divide-y divide-gray-200 mt-4">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Fee Type</th>
-                            <th class="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 text-sm">
-                        <tr>
-                            <td class="px-4 py-3 text-gray-700">Tuition Fee</td>
-                            <td class="px-4 py-3 text-right font-mono">₹{{ number_format($account->tuition_fee, 2) }}</td>
-                        </tr>
-                        <tr>
-                            <td class="px-4 py-3 flex items-center justify-between text-gray-700">
-                                <span>Books Fee Applied</span>
-                                <form action="{{ route('fees.books.update', $account->id) }}" method="POST" class="inline-flex gap-2">
-                                    @csrf
-                                    @method('PUT')
-                                    <input type="number" name="books_fee_applied" value="{{ (int)$account->books_fee_applied }}" class="w-20 px-1 border rounded text-right text-xs">
-                                    <button type="submit" class="text-xs text-indigo-600 hover:text-indigo-950 underline">Update</button>
-                                </form>
-                            </td>
-                            <td class="px-4 py-3 text-right font-mono">₹{{ number_format($account->books_fee_applied, 2) }}</td>
-                        </tr>
-                        <tr>
-                            <td class="px-4 py-3 text-gray-700">Carried Balance (Previous Years)</td>
-                            <td class="px-4 py-3 text-right font-mono text-red-600">₹{{ number_format($account->previous_balance_carried, 2) }}</td>
-                        </tr>
-                        <tr class="bg-green-50 text-green-700">
-                            <td class="px-4 py-3 font-semibold">Approved Concessions (-)</td>
-                            <td class="px-4 py-3 text-right font-mono font-semibold">₹{{ number_format($account->concession_amount, 2) }}</td>
-                        </tr>
-                        <tr class="font-bold border-t-2">
-                            <td class="px-4 py-3">Total Due Outstanding</td>
-                            <td class="px-4 py-3 text-right font-mono">₹{{ number_format($account->total_due, 2) }}</td>
-                        </tr>
-                        <tr class="text-gray-500">
-                            <td class="px-4 py-3">Total Fees Paid to Date</td>
-                            <td class="px-4 py-3 text-right font-mono text-green-600">₹{{ number_format($account->total_paid, 2) }}</td>
-                        </tr>
-                        <tr class="bg-gray-100 font-extrabold text-lg">
-                            <td class="px-4 py-3">Net Balance Remaining</td>
-                            <td class="px-4 py-3 text-right font-mono text-indigo-900">₹{{ number_format($account->remaining_balance, 2) }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Collect Payment Form Card -->
-            <div class="bg-white shadow overflow-hidden sm:rounded-lg p-6 border">
-                <h2 class="text-md font-bold text-gray-800 border-b pb-4 mb-4 uppercase">Record Transaction</h2>
-                @if($account->remaining_balance <= 0)
-                    <div class="bg-green-100 text-green-800 p-4 rounded text-center text-sm font-semibold">
-                        This account has been paid in full. No balance is currently due.
-                    </div>
-                @else
-                    <form action="{{ route('fees.payments.store') }}" method="POST">
-                        @csrf
-                        <input type="hidden" name="student_fee_account_id" value="{{ $account->id }}">
-
-                        <div class="mb-4">
-                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Payment Amount (₹)</label>
-                            <input type="number" step="0.01" name="amount" max="{{ $account->remaining_balance }}" required
-                                   value="{{ old('amount', $account->remaining_balance) }}"
-                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                        </div>
-
-                        <div class="mb-4">
-                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Payment Mode</label>
-                            <select name="payment_mode" required onchange="toggleRefField(this.value)"
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                                <option value="CASH">Cash</option>
-                                <option value="UPI">UPI (Digital)</option>
-                            </select>
-                        </div>
-
-                        <div class="mb-4 hidden" id="ref_container">
-                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">UPI / Reference Number</label>
-                            <input type="text" name="transaction_reference" id="transaction_reference"
-                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                        </div>
-
-                        <button type="submit" class="w-full inline-flex justify-center py-2.5 px-4 border border-transparent shadow-sm text-sm font-bold rounded-md text-white bg-indigo-900 hover:bg-indigo-800 focus:outline-none transition">
-                            Process Payment & Print Receipt
-                        </button>
-                    </form>
-                @endif
             </div>
         </div>
-    @endif
-</div>
+
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-top border-primary border-4">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h6 class="m-0 fw-bold text-dark text-uppercase small" style="letter-spacing: 1px;">Record Transaction</h6>
+                </div>
+                <div class="card-body p-4">
+                    @if($account->remaining_balance <= 0)
+                        <div class="text-center py-5">
+                            <div class="bg-success bg-opacity-10 text-success rounded-circle d-inline-flex align-items-center justify-content-center mb-4" style="width: 80px; height: 80px;">
+                                <i class="bi bi-check-lg fs-1"></i>
+                            </div>
+                            <h5 class="fw-bold text-dark">Account Paid In Full</h5>
+                            <p class="text-muted small px-3">This student has no outstanding balance for the current session.</p>
+                        </div>
+                    @else
+                        <form action="{{ route('fees.payments.store') }}" method="POST">
+                            @csrf
+                            <input type="hidden" name="student_fee_account_id" value="{{ $account->id }}">
+
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-2">Payment Amount (₹)</label>
+                                <div class="input-group input-group-lg shadow-sm rounded-3 overflow-hidden border">
+                                    <span class="input-group-text bg-light border-0 fw-bold">₹</span>
+                                    <input type="number" step="0.01" name="amount" max="{{ $account->remaining_balance }}" required
+                                           value="{{ old('amount', $account->remaining_balance) }}"
+                                           class="form-control border-0 fw-bold text-primary text-end px-4">
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-2">Payment Mode</label>
+                                <div class="d-flex gap-3">
+                                    <div class="flex-fill">
+                                        <input type="radio" class="btn-check" name="payment_mode" id="mode_cash" value="CASH" checked onchange="toggleRefField(this.value)">
+                                        <label class="btn btn-outline-primary w-100 py-2 fw-semibold rounded-3" for="mode_cash">
+                                            <i class="bi bi-cash me-2"></i> Cash
+                                        </label>
+                                    </div>
+                                    <div class="flex-fill">
+                                        <input type="radio" class="btn-check" name="payment_mode" id="mode_upi" value="UPI" onchange="toggleRefField(this.value)">
+                                        <label class="btn btn-outline-primary w-100 py-2 fw-semibold rounded-3" for="mode_upi">
+                                            <i class="bi bi-qr-code-scan me-2"></i> UPI
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-2">Books Purchased From School?</label>
+                                <div class="d-flex gap-3">
+                                    <div class="flex-fill">
+                                        <input type="radio" class="btn-check" name="books_purchased" id="books_yes" value="yes" checked>
+                                        <label class="btn btn-outline-secondary w-100 py-2 fw-semibold rounded-3" for="books_yes">Yes</label>
+                                    </div>
+                                    <div class="flex-fill">
+                                        <input type="radio" class="btn-check" name="books_purchased" id="books_no" value="no">
+                                        <label class="btn btn-outline-secondary w-100 py-2 fw-semibold rounded-3" for="books_no">No</label>
+                                    </div>
+                                </div>
+                                <div class="form-text small opacity-50">This information is for record tracking only.</div>
+                            </div>
+
+                            <div class="mb-4 d-none" id="ref_container">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-2">UPI / Reference Number</label>
+                                <input type="text" name="transaction_reference" id="transaction_reference"
+                                       class="form-control rounded-3" placeholder="Enter Transaction ID">
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-lg w-100 py-3 fw-bold shadow rounded-4 mt-2">
+                                <i class="bi bi-printer-fill me-2"></i> Process & Print Receipt
+                            </button>
+                            <p class="text-center text-muted small mt-3">
+                                <i class="bi bi-shield-check me-1"></i> Secure Transaction
+                            </p>
+                        </form>
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
+@endif
 
 <script>
     function toggleRefField(val) {
         const refContainer = document.getElementById('ref_container');
         const refField = document.getElementById('transaction_reference');
         if (val === 'UPI') {
-            refContainer.classList.remove('hidden');
+            refContainer.classList.remove('d-none');
             refField.setAttribute('required', 'required');
         } else {
-            refContainer.classList.add('hidden');
+            refContainer.classList.add('d-none');
             refField.removeAttribute('required');
         }
     }
