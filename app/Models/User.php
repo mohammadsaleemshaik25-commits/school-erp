@@ -13,15 +13,20 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
+    protected $primaryKey = 'user_id';
+
     /**
      * The attributes that are mass assignable.
      *
      * @var list<string>
      */
     protected $fillable = [
-        'name',
+        'role_id',
+        'username',
+        'full_name',
         'email',
-        'password',
+        'password_hash',
+        'is_active',
     ];
 
     /**
@@ -42,8 +47,25 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
+    }
+
+    public function getAuthPassword(): string
+    {
+        return $this->password_hash;
+    }
+
+    /**
+     * Automatically hash password when setting it
+     */
+    public function setPasswordAttribute($value)
+    {
+        $this->attributes['password_hash'] = bcrypt($value);
+    }
+
+    public function role()
+    {
+        return $this->belongsTo(Role::class, 'role_id', 'role_id');
     }
 }
