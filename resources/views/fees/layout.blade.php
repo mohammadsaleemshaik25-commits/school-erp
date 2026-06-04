@@ -94,7 +94,7 @@ function openCancelModal(cancelUrl, receiptNumber) {
                 <i class="bi bi-list fs-4"></i>
             </button>
             <a class="navbar-brand fw-bold d-flex align-items-center" href="{{ url('/') }}">
-                <i class="bi bi-mortarboard-fill me-2 fs-3"></i>
+                <img src="{{ asset('build/assets/school/logo.png') }}" alt="School Logo" style="height: 32px; margin-right: 8px;">
                 <span class="d-none d-sm-inline">Vikas High School ERP</span>
             </a>
             

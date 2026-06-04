@@ -120,7 +120,8 @@
 
     <div class="id-card">
         <div class="id-card-header">
-            VIKAS SCHOOL
+            <img src="{{ asset('build/assets/school/logo.png') }}" alt="School Logo" style="height:40px; margin-bottom:8px;">
+            <br>VIKAS SCHOOL
         </div>
 
         <div class="id-card-body">

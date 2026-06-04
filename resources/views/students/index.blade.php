@@ -55,6 +55,7 @@
 <table border="1" cellpadding="8" cellspacing="0">
     <thead>
         <tr>
+            <th>Photo</th>
             <th>Admission Number</th>
             <th>Student Name</th>
             <th>Profile</th>
@@ -63,6 +64,13 @@
     <tbody>
         @forelse ($students as $student)
             <tr>
+                <td>
+                    @if ($student->photo_path)
+                        <img src="{{ asset('storage/' . $student->photo_path) }}" alt="Photo" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
+                    @else
+                        <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 10px;">No Photo</div>
+                    @endif
+                </td>
                 <td>{{ $student->admission_no }}</td>
                 <td>{{ $student->student_name }}</td>
                 <td>
@@ -73,7 +81,7 @@
             </tr>
         @empty
             <tr>
-                <td colspan="3">
+                <td colspan="4">
                     No students found.
                 </td>
             </tr>

@@ -8,7 +8,7 @@
 
 <br><br>
 
-<form method="POST" action="/students">
+<form method="POST" action="/students" enctype="multipart/form-data">
     @csrf
 
     <input type="text"
@@ -179,6 +179,18 @@
     </select>
 
     @error('status')
+        <div>{{ $message }}</div>
+    @enderror
+
+    <br><br>
+
+    <label>Student Photo</label>
+    <br>
+    <input type="file"
+        name="photo"
+        accept="image/jpeg,image/jpg,image/png">
+
+    @error('photo')
         <div>{{ $message }}</div>
     @enderror
 

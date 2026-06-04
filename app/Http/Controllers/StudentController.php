@@ -47,7 +47,18 @@ class StudentController extends Controller
             'address' => ['nullable', 'string'],
             'admission_date' => ['required', 'date'],
             'status' => ['required', 'string', 'max:20'],
+            'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
         ]);
+
+        $photoPath = null;
+        if ($request->hasFile('photo')) {
+            $file = $request->file('photo');
+            $fileName = 'student_' . time() . '.' . $file->getClientOriginalExtension();
+            $photoPath = $file->storeAs('students/photos', $fileName, 'public');
+        }
+
+        $validated['photo_path'] = $photoPath;
+        unset($validated['photo']);
 
         Student::create($validated);
 
@@ -77,7 +88,17 @@ class StudentController extends Controller
             'address' => ['nullable', 'string'],
             'admission_date' => ['required', 'date'],
             'status' => ['required', 'string', 'max:20'],
+            'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
         ]);
+
+        if ($request->hasFile('photo')) {
+            $file = $request->file('photo');
+            $fileName = 'student_' . $student->student_id . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $photoPath = $file->storeAs('students/photos', $fileName, 'public');
+            $validated['photo_path'] = $photoPath;
+        }
+
+        unset($validated['photo']);
 
         $student->update($validated);
 

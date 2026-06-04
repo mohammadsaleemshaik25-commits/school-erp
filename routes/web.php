@@ -57,6 +57,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/students/{student}', [StudentController::class, 'show']);
         Route::get('/students/{student}/history', [StudentController::class, 'history']);
         Route::get('/students/{student}/documents', [StudentDocumentController::class, 'index']);
+        Route::get('/students/{student}/documents/{document}', [StudentDocumentController::class, 'show']);
+        Route::get('/students/{student}/documents/{document}/download', [StudentDocumentController::class, 'download']);
         Route::get('/students/{student}/enrollments', [StudentEnrollmentController::class, 'index']);
         Route::get('/students/{student}/tc/{document}', [TransferCertificateController::class, 'show']);
         Route::get('/students/{student}/id-card', [StudentController::class, 'idCard']);
@@ -85,6 +87,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/students/{student}/edit', [StudentController::class, 'edit']);
         Route::put('/students/{student}', [StudentController::class, 'update']);
         Route::post('/students/{student}/documents', [StudentDocumentController::class, 'store']);
+        Route::put('/students/{student}/documents/{document}', [StudentDocumentController::class, 'update']);
+        Route::delete('/students/{student}/documents/{document}', [StudentDocumentController::class, 'destroy']);
         Route::post('/students/{student}/enrollments', [StudentEnrollmentController::class, 'store']);
         Route::get('/students/{student}/tc', [TransferCertificateController::class, 'index']);
         Route::post('/students/{student}/tc', [TransferCertificateController::class, 'store']);

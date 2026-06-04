@@ -230,43 +230,58 @@
                 </div>
                 <div class="card-body p-4">
                     <div class="row g-3 mb-4">
-                        <div class="col-md-6">
-                            <div class="p-3 bg-light rounded-4 h-100">
-                                <div class="row mb-2">
-                                    <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Student Name</div>
-                                    <div class="col-7 fw-bold text-dark">{{ $account->student?->student_name ?? 'N/A' }}</div>
-                                </div>
-                                <div class="row mb-2">
-                                    <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Admission No</div>
-                                    <div class="col-7 fw-bold font-monospace text-primary">{{ $account->student?->admission_no ?? '-' }}</div>
-                                </div>
-                                <div class="row mb-2">
-                                    <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Father's Name</div>
-                                    <div class="col-7 fw-semibold">{{ $account->student?->father_name ?? '-' }}</div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Phone Number</div>
-                                    <div class="col-7 fw-semibold">{{ $account->student?->phone_primary ?? '-' }}</div>
-                                </div>
+                        <div class="col-md-3">
+                            <div class="p-3 bg-light rounded-4 h-100 text-center">
+                                @if ($account->student?->photo_path)
+                                    <img src="{{ asset('storage/' . $account->student->photo_path) }}" alt="Student Photo" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                @else
+                                    <div style="width: 100px; height: 100px; border-radius: 50%; background-color: #e0e0e0; display: flex; align-items: center; justify-content: center; margin: 0 auto; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                        <span style="font-size: 12px; color: #666;">No Photo</span>
+                                    </div>
+                                @endif
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="p-3 bg-light rounded-4 h-100">
-                                <div class="row mb-2">
-                                    <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Academic Year</div>
-                                    <div class="col-7 fw-bold">{{ optional($account->academicYear)->year_name ?? '-' }}</div>
+                        <div class="col-md-9">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="p-3 bg-light rounded-4 h-100">
+                                        <div class="row mb-2">
+                                            <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Student Name</div>
+                                            <div class="col-7 fw-bold text-dark">{{ $account->student?->student_name ?? 'N/A' }}</div>
+                                        </div>
+                                        <div class="row mb-2">
+                                            <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Admission No</div>
+                                            <div class="col-7 fw-bold font-monospace text-primary">{{ $account->student?->admission_no ?? '-' }}</div>
+                                        </div>
+                                        <div class="row mb-2">
+                                            <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Father's Name</div>
+                                            <div class="col-7 fw-semibold">{{ $account->student?->father_name ?? '-' }}</div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Phone Number</div>
+                                            <div class="col-7 fw-semibold">{{ $account->student?->phone_primary ?? '-' }}</div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="row mb-2">
-                                    <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Class / Section</div>
-                                    <div class="col-7 fw-bold text-dark">{{ optional($account->classRoom)->class_name ?? '-' }} / {{ optional($account->section)->section_name ?? '-' }}</div>
-                                </div>
-                                <div class="row mb-2">
-                                    <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Mother's Name</div>
-                                    <div class="col-7 fw-semibold">{{ $account->student?->mother_name ?? '-' }}</div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Guardian</div>
-                                    <div class="col-7 fw-semibold">{{ $account->student?->guardian_name ?? '-' }}</div>
+                                <div class="col-md-6">
+                                    <div class="p-3 bg-light rounded-4 h-100">
+                                        <div class="row mb-2">
+                                            <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Academic Year</div>
+                                            <div class="col-7 fw-bold">{{ optional($account->academicYear)->year_name ?? '-' }}</div>
+                                        </div>
+                                        <div class="row mb-2">
+                                            <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Class / Section</div>
+                                            <div class="col-7 fw-bold text-dark">{{ optional($account->classRoom)->class_name ?? '-' }} / {{ optional($account->section)->section_name ?? '-' }}</div>
+                                        </div>
+                                        <div class="row mb-2">
+                                            <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Mother's Name</div>
+                                            <div class="col-7 fw-semibold">{{ $account->student?->mother_name ?? '-' }}</div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-5 small text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Guardian</div>
+                                            <div class="col-7 fw-semibold">{{ $account->student?->guardian_name ?? '-' }}</div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
