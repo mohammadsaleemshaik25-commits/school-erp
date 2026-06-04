@@ -23,6 +23,69 @@
     </style>
 </head>
 <!-- SweetAlert2 -->
+<script>
+function openCancelModal(cancelUrl, receiptNumber) {
+
+    Swal.fire({
+        title: 'Cancel Receipt?',
+        html: `
+            <p>Receipt: <strong>${receiptNumber}</strong></p>
+            <textarea id="cancelReason"
+                      class="swal2-textarea"
+                      placeholder="Enter cancellation reason"></textarea>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Cancel',
+        confirmButtonColor: '#dc3545',
+        cancelButtonText: 'No'
+    }).then((result) => {
+
+        if (result.isConfirmed) {
+
+            const reason =
+                document.getElementById('cancelReason').value;
+
+            if (!reason.trim()) {
+
+                Swal.fire(
+                    'Error',
+                    'Cancellation reason is required',
+                    'error'
+                );
+
+                return;
+            }
+
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = cancelUrl;
+
+            const csrf = document.createElement('input');
+            csrf.type = 'hidden';
+            csrf.name = '_token';
+            csrf.value =
+                document.querySelector(
+                    'meta[name="csrf-token"]'
+                ).content;
+
+            const reasonInput =
+                document.createElement('input');
+
+            reasonInput.type = 'hidden';
+            reasonInput.name = 'cancellation_reason';
+            reasonInput.value = reason;
+
+            form.appendChild(csrf);
+            form.appendChild(reasonInput);
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+    });
+}
+</script>
+
 
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow fixed-top topbar">
