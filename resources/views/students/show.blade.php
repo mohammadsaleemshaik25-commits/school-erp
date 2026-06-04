@@ -44,6 +44,22 @@
 
 <br><br>
 
+<div class="text-center mb-3">
+    @if($student->photo_path)
+        <img src="{{ asset('storage/'.$student->photo_path) }}"
+             class="rounded-circle border shadow"
+             width="120"
+             height="120"
+             style="object-fit:cover;">
+    @else
+        <div style="width: 120px; height: 120px; border-radius: 50%; background-color: #e0e0e0; display: flex; align-items: center; justify-content: center; margin: 0 auto; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <span style="font-size: 12px; color: #666;">No Photo</span>
+        </div>
+    @endif
+</div>
+
+<br>
+
 <table border="1" cellpadding="8" cellspacing="0">
     <tr>
         <th>Admission Number</th>

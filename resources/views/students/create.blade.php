@@ -184,6 +184,57 @@
 
     <br><br>
 
+    <label>Academic Year</label>
+    <br>
+    <select name="academic_year_id" required>
+        <option value="">Select Academic Year</option>
+        @foreach($academicYears as $academicYear)
+            <option value="{{ $academicYear->academic_year_id }}" @selected(old('academic_year_id') == $academicYear->academic_year_id)>
+                {{ $academicYear->year_name }}
+            </option>
+        @endforeach
+    </select>
+
+    @error('academic_year_id')
+        <div>{{ $message }}</div>
+    @enderror
+
+    <br><br>
+
+    <label>Class</label>
+    <br>
+    <select name="class_id" required>
+        <option value="">Select Class</option>
+        @foreach($classes as $class)
+            <option value="{{ $class->class_id }}" @selected(old('class_id') == $class->class_id)>
+                {{ $class->class_name }}
+            </option>
+        @endforeach
+    </select>
+
+    @error('class_id')
+        <div>{{ $message }}</div>
+    @enderror
+
+    <br><br>
+
+    <label>Section</label>
+    <br>
+    <select name="section_id" required>
+        <option value="">Select Section</option>
+        @foreach($sections as $section)
+            <option value="{{ $section->section_id }}" @selected(old('section_id') == $section->section_id)>
+                {{ $section->section_name }}
+            </option>
+        @endforeach
+    </select>
+
+    @error('section_id')
+        <div>{{ $message }}</div>
+    @enderror
+
+    <br><br>
+
     <label>Student Photo</label>
     <br>
     <input type="file"
@@ -197,6 +248,6 @@
     <br><br>
 
     <button type="submit">
-        Save
+        Save Student
     </button>
 </form>
