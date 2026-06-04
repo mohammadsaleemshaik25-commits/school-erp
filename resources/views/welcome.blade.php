@@ -13,9 +13,7 @@
     <header class="bg-indigo-900 text-white shadow-md">
         <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
             <div class="flex items-center space-x-3">
-                <div class="bg-white p-2 rounded-full text-indigo-900 font-extrabold text-xl w-10 h-10 flex items-center justify-center shadow">
-                    V
-                </div>
+                <img src="{{ asset('build/assets/school/logo.png') }}" alt="School Logo" style="height: 40px;">
                 <span class="text-xl font-bold tracking-wider">VIKAS HIGH SCHOOL</span>
             </div>
             <nav class="space-x-4">
@@ -74,6 +72,9 @@
     <!-- Footer -->
     <footer class="bg-gray-900 text-gray-400 py-8">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
+                <img src="{{ asset('build/assets/school/logo.png') }}" alt="School Logo" style="height: 30px;">
+            </div>
             <p>&copy; {{ date('Y') }} Vikas High School ERP Project. All rights reserved.</p>
         </div>
     </footer>

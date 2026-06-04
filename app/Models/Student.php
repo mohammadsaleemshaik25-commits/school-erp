@@ -26,6 +26,7 @@ class Student extends Model
         'address',
         'admission_date',
         'status',
+        'photo_path',
     ];
 
     public function documents()

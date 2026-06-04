@@ -20,6 +20,9 @@
         <a href="/students">Back to Students</a>
     </div>
 
+    <div style="text-align:center; margin-bottom:16px;">
+        <img src="{{ asset('build/assets/school/logo.png') }}" alt="School Logo" style="height:60px;">
+    </div>
     <h1>VIKAS SCHOOL</h1>
     <p class="meta">{{ $title }} — Generated {{ now()->format('d M Y H:i') }}</p>
 

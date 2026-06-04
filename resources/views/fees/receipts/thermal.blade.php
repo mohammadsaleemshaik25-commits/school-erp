@@ -41,7 +41,7 @@
     </div>
            <div class="header text-center">
 
-    <img src="{{ public_path('build/assets/school/logo.png') }}"
+    <img src="{{ asset('build/assets/school/logo.png') }}"
          alt="School Logo"
          style="width:60px;height:60px;margin-bottom:5px;">
 

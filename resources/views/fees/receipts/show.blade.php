@@ -9,7 +9,10 @@
         <div class="card-body p-4">
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
-                    <h3 class="mb-0">Vikas High School</h3>
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+                        <img src="{{ asset('build/assets/school/logo.png') }}" alt="School Logo" style="height:50px;">
+                        <h3 class="mb-0">Vikas High School</h3>
+                    </div>
                     <small class="text-muted">Official Fee Receipt</small>
                     @if($receipt->is_duplicate)
                         <div class="mt-2 text-danger fw-bold border border-danger p-1 text-center" style="transform: rotate(-5deg);">

@@ -6,7 +6,7 @@
 
 <br><br>
 
-<form method="POST" action="/students/{{ $student->student_id }}">
+<form method="POST" action="/students/{{ $student->student_id }}" enctype="multipart/form-data">
     @csrf
     @method('PUT')
 
@@ -77,6 +77,16 @@
         <option value="TRANSFERRED" @selected(old('status', $student->status) === 'TRANSFERRED')>TRANSFERRED</option>
     </select>
     @error('status') <div>{{ $message }}</div> @enderror
+    <br><br>
+
+    <label>Student Photo</label>
+    <br>
+    @if ($student->photo_path)
+        <img src="{{ asset('storage/' . $student->photo_path) }}" alt="Current Photo" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; margin-bottom: 10px;">
+        <br>
+    @endif
+    <input type="file" name="photo" accept="image/jpeg,image/jpg,image/png">
+    @error('photo') <div>{{ $message }}</div> @enderror
     <br><br>
 
     <button type="submit">Update</button>
