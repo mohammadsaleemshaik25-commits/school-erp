@@ -17,11 +17,11 @@ class StoreFeeAdjustmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'student_fee_account_id' => 'required|exists:student_fee_accounts,id',
-            'adjustment_type'        => 'required|in:CONCESSION,WAIVER,PREVIOUS_BALANCE_WAIVER',
-            'sub_type'               => 'required|in:SIBLING_DISCOUNT,MERIT_SCHOLARSHIP,SPECIAL_CONCESSION,BALANCE_WAIVER',
-            'amount'                 => 'required|numeric|min:0.01',
-            'reason'                 => 'required|string|min:5|max:500',
+            'account_id'      => 'required|exists:student_fee_accounts,account_id',
+            'adjustment_type' => 'required|string|max:40',
+            'discount_amount' => 'required|numeric|min:0',
+            'discount_percent' => 'nullable|numeric|min:0|max:100',
+            'reason'          => 'required|string|min:5|max:500',
         ];
     }
 }

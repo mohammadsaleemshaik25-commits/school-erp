@@ -21,11 +21,16 @@ class FinanceService
     public function collectPayment(array $data, int $clerkId): Payment
     {
         return DB::transaction(function () use ($data, $clerkId) {
-            $accountId = $data['student_fee_account_id'];
+            $accountId = $data['account_id'];
             $amount = (float) $data['amount'];
+            if (floor($amount) != $amount) {
+                      throw new InvalidArgumentException(
+                      "Only whole rupee amounts are allowed.");
+}
+
 
             // 1. Lock Student Fee Account for updates
-            $feeAccount = StudentFeeAccount::where('id', $accountId)
+            $feeAccount = StudentFeeAccount::where('account_id', $accountId)
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -39,10 +44,86 @@ class FinanceService
                 throw new InvalidArgumentException("Excessive payment attempted. Outstanding balance is ₹" . number_format($remaining, 2));
             }
 
+            // --- DUPLICATE PAYMENT PROTECTION ---
+            $recentPayment = Payment::where('account_id', $accountId)
+                ->where('amount', $amount)
+                ->where('status', 'SUCCESS')
+                ->where('created_at', '>=', now()->subSeconds(30))
+                ->first();
+            
+            if ($recentPayment) {
+                throw new Exception("A similar payment of ₹" . number_format($amount, 2) . " was processed just seconds ago. To prevent duplicates, please wait a moment or check the ledger.");
+            }
+
+            // --- PAYMENT PROTECTION VALIDATION ---
+            if ($feeAccount->booksPurchasedOutside()) {
+                // If student is OUTSIDE, ensure books_fee_applied is 0 and amount is only for tuition
+                if ((float)$feeAccount->books_fee_applied > 0) {
+                     // Auto-fix if caught during payment
+                     $feeAccount->books_fee_applied = 0.00;
+                     $feeAccount->recalculateTotals();
+                     $feeAccount->save();
+                }
+            }
+
             // 2. Create the Payment Record
+            // Calculate Books vs Tuition allocation
+            $booksDue = 0;
+            $booksPaid = 0.00;
+            $tuitionPaid = 0.00;
+
+            if ($feeAccount->books_status === 'SCHOOL') {
+                $totalBooksAlreadyPaid = (float) $feeAccount->payments()
+                    ->where('status', 'SUCCESS')
+                    ->sum('books_fee_paid');
+                
+                $booksRemaining = max(0, (float) $feeAccount->books_fee_applied - $totalBooksAlreadyPaid);
+
+                if ($amount <= $booksRemaining) {
+                    $booksPaid = $amount;
+                    $tuitionPaid = 0.00;
+                } else {
+                    $booksPaid = $booksRemaining;
+                    $tuitionPaid = $amount - $booksRemaining;
+                }
+            } else {
+                // If BOOKS_PAID or OUTSIDE or PENDING, all goes to tuition
+                // STRICT PROTECTION: Ensure booksPaid is ALWAYS 0 for OUTSIDE
+                $booksPaid = 0.00;
+                $tuitionPaid = $amount;
+            }
+
+            $feeComponentType = 'TUITION';
+            if ($booksPaid > 0 && $tuitionPaid > 0) {
+                $feeComponentType = 'MIXED';
+            } elseif ($booksPaid > 0) {
+                $feeComponentType = 'BOOKS';
+            }
+
+            // Re-verify protection for OUTSIDE status
+            if ($feeAccount->booksPurchasedOutside()) {
+                $booksPaid = 0.00;
+                $tuitionPaid = $amount;
+                $feeComponentType = 'TUITION';
+            }
+
+            // Check if books are now fully paid
+            if ($feeAccount->books_status === 'SCHOOL') {
+                $totalBooksPaidAfter = (float) $feeAccount->payments()
+                    ->where('status', 'SUCCESS')
+                    ->sum('books_fee_paid') + $booksPaid;
+                
+                if ($totalBooksPaidAfter >= (float) $feeAccount->books_fee_applied) {
+                    $feeAccount->books_status = 'BOOKS_PAID';
+                }
+            }
+
             $payment = Payment::create([
-                'student_fee_account_id' => $feeAccount->id,
+                'account_id' => $feeAccount->account_id,
+                'fee_component_type' => $feeComponentType,
                 'amount' => $amount,
+                'books_fee_paid' => $booksPaid,
+                'tuition_fee_paid' => $tuitionPaid,
                 'payment_mode' => $data['payment_mode'],
                 'transaction_reference' => $data['transaction_reference'] ?? null,
                 'payment_date' => now(),
@@ -50,31 +131,36 @@ class FinanceService
                 'status' => 'SUCCESS',
             ]);
 
-            // 3. Increment Paid Amount and Recalculate State
-            $feeAccount->total_paid = (float) $feeAccount->total_paid + $amount;
+            // 3. Recalculate State
             $feeAccount->recalculateTotals();
             $feeAccount->save();
 
             // 4. Thread-safe Receipt Generation
-            $academicYear = AcademicYear::query()
-                ->where('academic_year_id', $feeAccount->academic_year_id)
-                ->firstOrFail();
+            $enrollment = $feeAccount->enrollment;
+            if (!$enrollment) {
+                throw new Exception("Enrollment record missing for account.");
+            }
+            
+            $academicYear = $enrollment->academicYear;
             $receiptNumber = $this->generateReceiptNumber($academicYear);
 
             $receipt = Receipt::create([
-                'payment_id' => $payment->id,
+                'payment_id' => $payment->payment_id,
                 'receipt_number' => $receiptNumber,
+                'receipt_date' => now(),
+                'generated_datetime' => now(),
+                'generated_by' => $clerkId,
                 'status' => 'ACTIVE',
             ]);
 
-            // 5. Build Audit Log
+            // 6. Build Audit Log
             $this->logAction(
                 $clerkId,
                 'PAYMENT_COLLECTION',
-                "Collected payment of ₹{$amount} via {$payment->payment_mode} for Student Fee Account ID: {$feeAccount->id}. Receipt: {$receiptNumber}"
+                "Collected payment of ₹{$amount} via {$payment->payment_mode} for Student Fee Account ID: {$feeAccount->account_id}. Receipt: {$receiptNumber}"
             );
 
-            return $payment->load('receipt', 'feeAccount.student');
+            return $payment->load('receipt', 'feeAccount.enrollment.student');
         });
     }
 
@@ -85,7 +171,7 @@ class FinanceService
     public function cancelPayment(int $paymentId, string $reason, int $userId): Payment
     {
         return DB::transaction(function () use ($paymentId, $reason, $userId) {
-            $payment = Payment::where('id', $paymentId)
+            $payment = Payment::where('payment_id', $paymentId)
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -93,37 +179,33 @@ class FinanceService
                 throw new InvalidArgumentException("This payment is already cancelled.");
             }
 
-            // 1. Rollback fee account paid value
-            $feeAccount = StudentFeeAccount::where('id', $payment->student_fee_account_id)
+            // 1. Rollback fee account status
+            $feeAccount = StudentFeeAccount::where('account_id', $payment->account_id)
                 ->lockForUpdate()
                 ->firstOrFail();
-
-            $feeAccount->total_paid = max(0.00, (float) $feeAccount->total_paid - (float) $payment->amount);
-            $feeAccount->recalculateTotals();
-            $feeAccount->save();
 
             // 2. Terminate Receipt
             if ($payment->receipt) {
                 $payment->receipt->update([
                     'status' => 'CANCELLED',
-                    'cancelled_at' => now(),
-                    'cancelled_by' => $userId,
+                    'cancellation_reason' => $reason,
                 ]);
             }
 
             // 3. Mark Payment Cancelled
             $payment->update([
                 'status' => 'CANCELLED',
-                'cancelled_at' => now(),
-                'cancelled_by' => $userId,
-                'cancellation_reason' => $reason,
             ]);
+
+            // Recalculate account status after cancellation
+            $feeAccount->recalculateTotals();
+            $feeAccount->save();
 
             // 4. Log Action
             $this->logAction(
                 $userId,
                 'PAYMENT_CANCELLATION',
-                "Cancelled payment ID: {$payment->id} (Amount: ₹{$payment->amount}). Reason: {$reason}"
+                "Cancelled payment ID: {$payment->payment_id} (Amount: ₹{$payment->amount}). Reason: {$reason}"
             );
 
             return $payment;
@@ -136,13 +218,13 @@ class FinanceService
     public function requestAdjustment(array $data, int $requesterId): StudentFeeAdjustment
     {
         return StudentFeeAdjustment::create([
-            'student_fee_account_id' => $data['student_fee_account_id'],
+            'account_id' => $data['account_id'],
             'adjustment_type' => $data['adjustment_type'],
-            'sub_type' => $data['sub_type'],
-            'amount' => $data['amount'],
+            'discount_amount' => $data['discount_amount'],
+            'discount_percent' => $data['discount_percent'] ?? 0,
             'reason' => $data['reason'],
             'requested_by' => $requesterId,
-            'status' => 'PENDING',
+            'approval_status' => 'PENDING',
         ]);
     }
 
@@ -156,27 +238,27 @@ class FinanceService
         }
 
         return DB::transaction(function () use ($adjustmentId, $status, $remarks, $deciderId) {
-            $adjustment = StudentFeeAdjustment::where('id', $adjustmentId)
+            $adjustment = StudentFeeAdjustment::where('adjustment_id', $adjustmentId)
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($adjustment->status !== 'PENDING') {
+            if ($adjustment->approval_status !== 'PENDING') {
                 throw new InvalidArgumentException("This adjustment request has already been processed.");
             }
 
             $adjustment->update([
-                'status' => $status,
+                'approval_status' => $status === 'APPROVED' ? 'APPROVED' : 'REJECTED',
                 'approved_by' => $deciderId,
-                'decided_at' => now(),
-                'decision_remarks' => $remarks,
+                'approved_at' => now(),
+                'rejection_reason' => $status === 'REJECTED' ? $remarks : null,
             ]);
 
             if ($status === 'APPROVED') {
-                $feeAccount = StudentFeeAccount::where('id', $adjustment->student_fee_account_id)
+                $feeAccount = StudentFeeAccount::where('account_id', $adjustment->account_id)
                     ->lockForUpdate()
                     ->firstOrFail();
 
-                $feeAccount->concession_amount = (float) $feeAccount->concession_amount + (float) $adjustment->amount;
+                $feeAccount->waived_amount = (float) $feeAccount->waived_amount + (float) $adjustment->discount_amount;
                 $feeAccount->recalculateTotals();
                 $feeAccount->save();
             }
@@ -184,35 +266,10 @@ class FinanceService
             $this->logAction(
                 $deciderId,
                 'FEE_ADJUSTMENT_DECISION',
-                "Adjustment ID: {$adjustment->id} resolved to {$status}. Remarks: {$remarks}"
+                "Adjustment ID: {$adjustment->adjustment_id} resolved to {$status}. Remarks: {$remarks}"
             );
 
             return $adjustment;
-        });
-    }
-
-    /**
-     * Handles specific scenario where books fee rules change dynamically
-     */
-    public function updateBooksFeeApplied(int $feeAccountId, float $amount, int $userId): StudentFeeAccount
-    {
-        return DB::transaction(function () use ($feeAccountId, $amount, $userId) {
-            $feeAccount = StudentFeeAccount::where('id', $feeAccountId)
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            $oldFee = $feeAccount->books_fee_applied;
-            $feeAccount->books_fee_applied = $amount;
-            $feeAccount->recalculateTotals();
-            $feeAccount->save();
-
-            $this->logAction(
-                $userId,
-                'BOOKS_FEE_UPDATE',
-                "Updated books fee on Account ID {$feeAccountId} from ₹{$oldFee} to ₹{$amount}"
-            );
-
-            return $feeAccount;
         });
     }
 
@@ -226,7 +283,7 @@ class FinanceService
         // Lock existing receipt records for matching year to construct safe sequential counter
         $lastReceipt = Receipt::where('receipt_number', 'LIKE', "REC-{$yearPart}-%")
             ->lockForUpdate()
-            ->orderBy('id', 'desc')
+            ->orderBy('receipt_id', 'desc')
             ->first();
 
         $nextSequence = 1;
@@ -241,17 +298,97 @@ class FinanceService
     }
 
     /**
-     * Logs internal actions for clear accountability and security
+     * Update the books purchase decision for a student.
+     * This is a one-time decision that freezes the books fee status.
      */
-    protected function logAction(int $userId, string $action, string $description): void
+    public function updateBooksDecision(int $accountId, string $decision, int $clerkId): StudentFeeAccount
+    {
+        return DB::transaction(function () use ($accountId, $decision, $clerkId) {
+            $feeAccount = StudentFeeAccount::where('account_id', $accountId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($feeAccount->books_status !== 'PENDING') {
+                throw new Exception("Books decision has already been finalized for this account.");
+            }
+
+            // Check if any books payment already exists
+            $booksPaid = $feeAccount->payments()
+                ->where('status', 'SUCCESS')
+                ->where('books_fee_paid', '>', 0)
+                ->exists();
+            
+            if ($booksPaid) {
+                throw new Exception("Cannot change books status because books payments have already been recorded.");
+            }
+
+            if ($decision === 'SCHOOL') {
+                $feeAccount->books_status = 'SCHOOL';
+                $feeAccount->books_from_school = true;
+                // net_fee remains Tuition + Books
+            } elseif ($decision === 'OUTSIDE') {
+                $feeAccount->books_status = 'OUTSIDE';
+                $feeAccount->books_from_school = false;
+                $feeAccount->books_fee_applied = 0.00;
+                $feeAccount->net_fee = $feeAccount->final_tuition_fee; // CRITICAL: Reset net_fee to tuition only
+                $feeAccount->waived_amount += (float) $feeAccount->books_fee;
+                $feeAccount->waived_by = $clerkId;
+                $feeAccount->waived_date = now();
+            } else {
+                throw new InvalidArgumentException("Invalid books decision.");
+            }
+
+            $feeAccount->recalculateTotals();
+            $feeAccount->save();
+
+            $this->logAction(
+                $clerkId,
+                'BOOKS_DECISION',
+                "Updated books decision to {$decision} for Student Fee Account ID: {$feeAccount->account_id}"
+            );
+
+            return $feeAccount;
+        });
+    }
+
+    /**
+     * Internal helper to log actions to audit_logs table.
+     */
+    protected function logAction(int $userId, string $action, string $details): void
     {
         AuditLog::create([
             'user_id' => $userId,
             'action' => $action,
-            'table_name' => 'finance',
-            'record_id' => null,
-            'new_value' => $description,
-            'ip_address' => request()->ip() ?? '127.0.0.1',
+            'table_name' => 'student_fee_accounts',
+            'record_id' => null, // Can be refined
+            'old_value' => null,
+            'new_value' => $details,
+            'ip_address' => request()->ip(),
         ]);
+    }
+
+    /**
+     * Mark a receipt as duplicated and increment print count.
+     */
+    public function reprintReceipt(int $receiptId, int $userId): Receipt
+    {
+        return DB::transaction(function () use ($receiptId, $userId) {
+            $receipt = Receipt::where('receipt_id', $receiptId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $receipt->update([
+                'is_duplicate' => true,
+                'printed_count' => $receipt->printed_count + 1,
+            ]);
+
+            $this->logAction(
+                $userId,
+                'RECEIPT_REPRINT',
+                "Reprinted receipt: {$receipt->receipt_number} (Total Prints: {$receipt->printed_count})"
+            );
+
+            return $receipt;
+        });
     }
 }

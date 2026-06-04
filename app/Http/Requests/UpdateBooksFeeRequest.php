@@ -17,7 +17,20 @@ class UpdateBooksFeeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'books_fee_applied' => 'required|numeric|min:0',
+            'books_status' => 'required|in:SCHOOL,OUTSIDE',
+            'student_name_confirmation' => 'required|string',
         ];
+    }
+
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            $accountId = $this->route('accountId');
+            $account = \App\Models\StudentFeeAccount::with('enrollment.student')->find($accountId);
+            
+            if ($account && strtoupper($this->student_name_confirmation) !== strtoupper($account->enrollment->student->student_name)) {
+                $validator->errors()->add('student_name_confirmation', 'Student name does not match. Please type the full name exactly as shown.');
+            }
+        });
     }
 }

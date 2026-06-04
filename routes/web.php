@@ -41,14 +41,17 @@ Route::middleware(['auth', 'active'])->group(function () {
 
         Route::get('/fees/collect', [PaymentController::class, 'create'])->name('fees.collect');
         Route::post('/fees/collect', [PaymentController::class, 'store'])->name('fees.payments.store');
+        Route::get('/fees/ledger/{account}', [PaymentController::class, 'ledger'])->name('fees.ledger');
 
         Route::get('/receipts', [ReceiptController::class, 'index'])->name('fees.receipts.index');
         Route::get('/receipts/{receipt}', [ReceiptController::class, 'show'])->name('fees.receipts.show');
         Route::get('/receipts/{receipt}/print', [ReceiptController::class, 'show'])->name('fees.receipts.print');
+        Route::post('/receipts/{receipt}/reprint', [ReceiptController::class, 'reprint'])->name('fees.receipts.reprint');
+        Route::post('/payments/{payment}/cancel', [PaymentController::class, 'cancel'])->name('fees.payments.cancel');
 
         Route::get('/fees/adjustments', [FeeAdjustmentController::class, 'index'])->name('fees.adjustments.index');
         Route::post('/fees/adjustments', [FeeAdjustmentController::class, 'store']);
-        Route::put('/fees/books-fee/{account}', [BooksFeeController::class, 'update'])->name('fees.books.update');
+        Route::patch('/fees/books-fee/{accountId}', [BooksFeeController::class, 'update'])->name('fees.books.update');
 
         Route::get('/students', [StudentController::class, 'index']);
         Route::get('/students/{student}', [StudentController::class, 'show']);
@@ -60,6 +63,7 @@ Route::middleware(['auth', 'active'])->group(function () {
 
         Route::get('/student-report', [ReportController::class, 'studentReport'])->name('reports.student');
         Route::get('/fees/reports/daily', [ReportController::class, 'dailyCollection'])->name('fees.reports.daily');
+        Route::get('/fees/reports/closing', [ReportController::class, 'clerkDailyClosing'])->name('fees.reports.closing');
 
         Route::prefix('api')->group(function () {
             Route::get('/students', [StudentApiController::class, 'index']);
@@ -85,7 +89,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/students/{student}/tc', [TransferCertificateController::class, 'index']);
         Route::post('/students/{student}/tc', [TransferCertificateController::class, 'store']);
 
-        Route::post('/payments/{payment}/cancel', [PaymentController::class, 'cancel'])->name('fees.payments.cancel');
         Route::post('/fees/adjustments/{adjustment}/decide', [FeeAdjustmentController::class, 'decide'])->name('fees.adjustments.decide');
 
         Route::get('/pending-fees', [ReportController::class, 'pendingFeeReport'])->name('reports.pending');

@@ -18,18 +18,18 @@ class BooksFeeController extends Controller
     /**
      * Updates books fee state based on school purchase decisions
      */
-    public function update(UpdateBooksFeeRequest $request, int $id)
+    public function update(UpdateBooksFeeRequest $request, int $accountId)
     {
         try {
-            $this->financeService->updateBooksFeeApplied(
-                $id,
-                (float) $request->validated()['books_fee_applied'],
+            $this->financeService->updateBooksDecision(
+                $accountId,
+                $request->validated()['books_status'],
                 auth()->id()
             );
 
             return redirect()
                 ->back()
-                ->with('success', 'Books fee applied parameter successfully configured.');
+                ->with('success', 'Books purchase decision finalized.');
         } catch (Exception $e) {
             return redirect()
                 ->back()

@@ -17,10 +17,11 @@ class CollectPaymentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'student_fee_account_id' => 'required|integer|exists:student_fee_accounts,id',
+            'account_id'             => 'required|integer|exists:student_fee_accounts,account_id',
             'amount'                 => 'required|numeric|min:0.01',
             'payment_mode'           => 'required|string|in:CASH,UPI',
             'transaction_reference'  => 'nullable|string|max:100|required_if:payment_mode,UPI',
+            'books_purchased'        => 'nullable|string|in:yes,no',
         ];
     }
 

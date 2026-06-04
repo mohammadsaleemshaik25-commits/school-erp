@@ -6,11 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 
 class Section extends Model
 {
+    public const UPDATED_AT = null;
+
     protected $table = 'sections';
 
     protected $primaryKey = 'section_id';
 
-    public $timestamps = false;
+    public $timestamps = true;
 
     protected $fillable = [
         'class_id',

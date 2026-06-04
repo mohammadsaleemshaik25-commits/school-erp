@@ -6,82 +6,201 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/**
- * Class StudentFeeAccount
- * Represents the primary financial record of a student for a specific academic year.
- */
 class StudentFeeAccount extends Model
 {
+    public const UPDATED_AT = null;
+
+    protected $primaryKey = 'account_id';
+
     protected $fillable = [
-        'student_id',
-        'academic_year_id',
-        'class_id',
-        'tuition_fee',
+        'enrollment_id',
+        'fee_structure_id',
+        'discount_amount',
+        'final_tuition_fee',
+        'books_status',
+        'books_from_school',
         'books_fee_applied',
-        'previous_balance_carried',
-        'concession_amount',
+        'books_fee',
+        'net_fee',
+        'previous_balance',
+        'waived_amount',
+        'waived_by',
+        'waived_date',
         'total_due',
-        'total_paid',
         'status',
+        'closed_at',
     ];
 
     protected $casts = [
-        'tuition_fee' => 'decimal:2',
+        'discount_amount' => 'decimal:2',
+        'final_tuition_fee' => 'decimal:2',
         'books_fee_applied' => 'decimal:2',
-        'previous_balance_carried' => 'decimal:2',
-        'concession_amount' => 'decimal:2',
+        'books_fee' => 'decimal:2',
+        'net_fee' => 'decimal:2',
+        'previous_balance' => 'decimal:2',
+        'waived_amount' => 'decimal:2',
         'total_due' => 'decimal:2',
-        'total_paid' => 'decimal:2',
+        'waived_date' => 'date',
+        'closed_at' => 'datetime',
+        'books_from_school' => 'boolean',
     ];
 
-    public function student(): BelongsTo
+    public function enrollment(): BelongsTo
     {
-        return $this->belongsTo(Student::class);
+        return $this->belongsTo(
+            StudentEnrollment::class,
+            'enrollment_id',
+            'enrollment_id'
+        );
     }
 
-    public function academicYear(): BelongsTo
+    public function feeStructure(): BelongsTo
     {
-        return $this->belongsTo(AcademicYear::class);
+        return $this->belongsTo(
+            FeeStructure::class,
+            'fee_structure_id',
+            'fee_structure_id'
+        );
+    }
+
+    public function student()
+    {
+        return $this->hasOneThrough(
+            Student::class,
+            StudentEnrollment::class,
+            'enrollment_id',
+            'student_id',
+            'enrollment_id',
+            'student_id'
+        );
+    }
+
+    public function academicYear()
+    {
+        return $this->hasOneThrough(
+            AcademicYear::class,
+            StudentEnrollment::class,
+            'enrollment_id',
+            'academic_year_id',
+            'enrollment_id',
+            'academic_year_id'
+        );
+    }
+
+    public function classRoom()
+    {
+        return $this->hasOneThrough(
+            ClassRoom::class,
+            StudentEnrollment::class,
+            'enrollment_id',
+            'class_id',
+            'enrollment_id',
+            'class_id'
+        );
+    }
+
+    public function section()
+    {
+        return $this->hasOneThrough(
+            Section::class,
+            StudentEnrollment::class,
+            'enrollment_id',
+            'section_id',
+            'enrollment_id',
+            'section_id'
+        );
     }
 
     public function payments(): HasMany
     {
-        return $this->hasMany(Payment::class);
+        return $this->hasMany(
+            Payment::class,
+            'account_id',
+            'account_id'
+        );
     }
 
     public function adjustments(): HasMany
     {
-        return $this->hasMany(StudentFeeAdjustment::class);
+        return $this->hasMany(
+            StudentFeeAdjustment::class,
+            'account_id',
+            'account_id'
+        );
     }
 
-    /**
-     * Re-calculates totals and determines the payment status.
-     * Does not save automatically to allow transaction management in service.
-     */
-    public function recalculateTotals(): void
+    // ==========================
+    // Books Status Helpers
+    // ==========================
+
+    public function booksPurchasedFromSchool(): bool
     {
-        $tuition = (float) $this->tuition_fee;
-        $books = (float) $this->books_fee_applied;
-        $carried = (float) $this->previous_balance_carried;
-        $concessions = (float) $this->concession_amount;
-
-        $this->total_due = ($tuition + $books + $carried) - $concessions;
-        $paid = (float) $this->total_paid;
-
-        if ($paid >= $this->total_due) {
-            $this->status = 'PAID';
-        } elseif ($paid > 0) {
-            $this->status = 'PARTIALLY_PAID';
-        } else {
-            $this->status = 'UNPAID';
-        }
+        return $this->books_status === 'SCHOOL';
     }
 
-    /**
-     * Compute remaining outstanding balance
-     */
+    public function booksPurchasedOutside(): bool
+    {
+        return $this->books_status === 'OUTSIDE';
+    }
+
+    public function booksPendingDecision(): bool
+    {
+        return $this->books_status === 'PENDING';
+    }
+
+    public function booksPaid(): bool
+    {
+        return $this->books_status === 'BOOKS_PAID';
+    }
+
+    // ==========================
+    // Financial Calculations
+    // ==========================
+
+   public function recalculateTotals(): void
+{
+    // Total due is (Tuition Fee + Books Fee (if School/Pending)) - Discounts/Waivers
+    // Wait, the schema has net_fee, final_tuition_fee, books_fee, books_fee_applied.
+    
+    // We'll use final_tuition_fee + books_fee_applied as the base.
+    $tuition = (float) $this->final_tuition_fee;
+    $books = (float) $this->books_fee_applied;
+    $prevBalance = (float) $this->previous_balance;
+    
+    $totalBilled = $tuition + $books + $prevBalance;
+    
+    $discounts = (float) $this->discount_amount + (float) $this->waived_amount;
+    
+    $this->total_due = max(0, $totalBilled - $discounts);
+
+    $paid = (float) $this->total_paid;
+
+    if ($paid >= $this->total_due) {
+        $this->status = 'PAID';
+        if (!$this->closed_at) {
+            $this->closed_at = now();
+        }
+    } elseif ($paid > 0) {
+        $this->status = 'PARTIALLY_PAID';
+        $this->closed_at = null;
+    } else {
+        $this->status = 'UNPAID';
+        $this->closed_at = null;
+    }
+}
+
+    public function getTotalPaidAttribute(): float
+    {
+        return (float) $this->payments()
+            ->where('status', 'SUCCESS')
+            ->sum('amount');
+    }
+
     public function getRemainingBalanceAttribute(): float
     {
-        return max(0.00, (float) ($this->total_due - $this->total_paid));
+        return max(
+            0.00,
+            (float) ($this->total_due - $this->total_paid)
+        );
     }
 }

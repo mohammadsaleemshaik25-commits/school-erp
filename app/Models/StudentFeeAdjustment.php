@@ -7,36 +7,41 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class StudentFeeAdjustment extends Model
 {
+    public const UPDATED_AT = null;
+
+    protected $primaryKey = 'adjustment_id';
+
     protected $fillable = [
-        'student_fee_account_id',
-        'adjustment_type', // CONCESSION, WAIVER, PREVIOUS_BALANCE_WAIVER
-        'sub_type',        // SIBLING_DISCOUNT, MERIT_SCHOLARSHIP, SPECIAL_CONCESSION, BALANCE_WAIVER
-        'amount',
+        'account_id',
+        'adjustment_type',
+        'discount_percent',
+        'discount_amount',
         'reason',
         'requested_by',
         'approved_by',
-        'status',          // PENDING, APPROVED, REJECTED
-        'decided_at',
-        'decision_remarks',
+        'approval_status',
+        'approved_at',
+        'rejection_reason',
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2',
-        'decided_at' => 'datetime',
+        'discount_percent' => 'decimal:2',
+        'discount_amount' => 'decimal:2',
+        'approved_at' => 'datetime',
     ];
 
     public function feeAccount(): BelongsTo
     {
-        return $this->belongsTo(StudentFeeAccount::class, 'student_fee_account_id');
+        return $this->belongsTo(StudentFeeAccount::class, 'account_id', 'account_id');
     }
 
     public function requester(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'requested_by');
+        return $this->belongsTo(User::class, 'requested_by', 'user_id');
     }
 
     public function approver(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'approved_by');
+        return $this->belongsTo(User::class, 'approved_by', 'user_id');
     }
 }

@@ -27,7 +27,7 @@ class FeeAdjustmentController extends Controller
             ->orderBy('created_at', 'desc');
 
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $query->where('approval_status', $request->status);
         }
 
         $adjustments = $query->paginate(15);
@@ -56,11 +56,11 @@ class FeeAdjustmentController extends Controller
     /**
      * Authorize decision on concession (Principal/Correspondent only)
      */
-    public function decide(DecideFeeAdjustmentRequest $request, int $id)
+    public function decide(DecideFeeAdjustmentRequest $request, int $adjustmentId)
     {
         try {
             $adjustment = $this->financeService->decideAdjustment(
-                $id,
+                $adjustmentId,
                 $request->validated()['status'],
                 $request->validated()['decision_remarks'] ?? null,
                 auth()->id()
@@ -68,7 +68,7 @@ class FeeAdjustmentController extends Controller
 
             return redirect()
                 ->back()
-                ->with('success', 'Concession code request #' . $id . ' has been ' . strtolower($adjustment->status) . '.');
+                ->with('success', 'Concession request #' . $adjustmentId . ' has been ' . strtolower($adjustment->approval_status) . '.');
         } catch (Exception $e) {
             return redirect()
                 ->back()

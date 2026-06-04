@@ -39,15 +39,14 @@
                 @forelse($adjustments as $adj)
                     <tr>
                         <td class="px-4">
-                            <div class="fw-bold text-dark">{{ $adj->feeAccount->student->student_name }}</div>
-                            <div class="small text-muted font-monospace">Adm No: {{ $adj->feeAccount->student->admission_no }}</div>
+                            <div class="fw-bold text-dark">{{ $adj->feeAccount?->student?->student_name ?? 'N/A' }}</div>
+                            <div class="small text-muted font-monospace">Adm No: {{ $adj->feeAccount?->student?->admission_no ?? '-' }}</div>
                         </td>
                         <td>
                             <div class="fw-semibold text-primary small">{{ $adj->adjustment_type }}</div>
-                            <div class="small text-muted">{{ $adj->sub_type }}</div>
                         </td>
                         <td class="text-end font-monospace fw-bold text-danger">
-                            -₹{{ number_format($adj->amount, 2) }}
+                            -₹{{ number_format($adj->discount_amount, 2) }}
                         </td>
                         <td class="px-3">
                             <div class="small text-truncate" style="max-width: 200px;" title="{{ $adj->reason }}">
@@ -56,13 +55,13 @@
                         </td>
                         <td class="text-center">
                             <span class="badge rounded-pill 
-                                {{ $adj->status === 'APPROVED' ? 'bg-success-subtle text-success border border-success' : ($adj->status === 'REJECTED' ? 'bg-danger-subtle text-danger border border-danger' : 'bg-warning-subtle text-warning border border-warning') }}">
-                                {{ $adj->status }}
+                                {{ $adj->approval_status === 'APPROVED' ? 'bg-success-subtle text-success border border-success' : ($adj->approval_status === 'REJECTED' ? 'bg-danger-subtle text-danger border border-danger' : 'bg-warning-subtle text-warning border border-warning') }}">
+                                {{ $adj->approval_status }}
                             </span>
                         </td>
                         <td class="text-end px-4">
-                            @if($adj->status === 'PENDING' && in_array(strtoupper(optional(auth()->user()->role)->role_name ?? ''), ['ADMINISTRATOR', 'ADMIN', 'PRINCIPAL', 'CORRESPONDENT'], true))
-                                <form action="{{ route('fees.adjustments.decide', $adj->id) }}" method="POST" class="d-flex gap-1 justify-content-end align-items-center">
+                            @if($adj->approval_status === 'PENDING' && in_array(strtoupper(optional(auth()->user()->role)->role_name ?? ''), ['ADMINISTRATOR', 'ADMIN', 'PRINCIPAL', 'CORRESPONDENT'], true))
+                                <form action="{{ route('fees.adjustments.decide', $adj->adjustment_id) }}" method="POST" class="d-flex gap-1 justify-content-end align-items-center">
                                     @csrf
                                     <input type="text" name="decision_remarks" placeholder="Remarks..." class="form-control form-control-sm" style="width: 120px;">
                                     <button type="submit" name="status" value="APPROVED" class="btn btn-success btn-sm shadow-sm" title="Approve">

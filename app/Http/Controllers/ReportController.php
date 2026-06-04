@@ -6,20 +6,68 @@ use App\Models\Payment;
 use App\Models\StudentFeeAccount;
 use App\Models\ClassRoom;
 use App\Models\AcademicYear;
-use App\Models\Student;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\View\View;
 
 class ReportController extends Controller
 {
+    /**
+     * Clerk Daily Closing Report
+     */
+    public function clerkDailyClosing(Request $request): View
+    {
+        $role = strtoupper(optional(auth()->user()->role)->role_name ?? '');
+        $dateStr = $request->get('date', Carbon::today()->toDateString());
+        $clerkId = $request->get('clerk_id', auth()->id());
+
+        // Clerks can only see their own report
+        if ($role === 'CLERK') {
+            $clerkId = auth()->id();
+        }
+
+        $query = Payment::whereDate('payment_date', $dateStr)
+            ->where('collected_by', $clerkId);
+
+        $payments = (clone $query)->where('status', 'SUCCESS')->get();
+        $cancelledPayments = (clone $query)->where('status', 'CANCELLED')->get();
+
+        $stats = [
+            'successful_count' => $payments->count(),
+            'cancelled_count' => $cancelledPayments->count(),
+            'cash_total' => $payments->where('payment_mode', 'CASH')->sum('amount'),
+            'upi_total' => $payments->where('payment_mode', 'UPI')->sum('amount'),
+            'books_total' => $payments->sum('books_fee_paid'),
+            'tuition_total' => $payments->sum('tuition_fee_paid'),
+            'total_collection' => $payments->sum('amount'),
+        ];
+
+        $clerks = [];
+        if (in_array($role, ['ADMIN', 'ADMINISTRATOR', 'PRINCIPAL', 'CORRESPONDENT'])) {
+            $clerks = User::whereHas('role', function($q) {
+                $q->where('role_name', 'Clerk');
+            })->get();
+        }
+
+        $selectedClerk = User::find($clerkId);
+
+        return view('fees.reports.closing', compact('stats', 'payments', 'cancelledPayments', 'dateStr', 'clerks', 'selectedClerk'));
+    }
+
     public function studentReport(): View
     {
-        $students = Student::query()
+        $students = Student::with(['enrollments' => function ($query) {
+                $query->with(['academicYear', 'classRoom', 'section'])
+                    ->join('academic_years', 'student_enrollments.academic_year_id', '=', 'academic_years.academic_year_id')
+                    ->orderByDesc('academic_years.start_date')
+                    ->select('student_enrollments.*');
+            }])
             ->orderBy('student_name')
             ->get()
             ->map(function (Student $student) {
-                $enrollment = $student->currentEnrollment() ?? $student->latestEnrollment();
+                // Get the first enrollment which will be the latest due to the ordering in with()
+                $enrollment = $student->enrollments->first();
 
                 return [
                     'admission_no' => $student->admission_no,
@@ -53,27 +101,34 @@ class ReportController extends Controller
     {
         $accounts = StudentFeeAccount::with('student')
             ->get()
-            ->filter(fn (StudentFeeAccount $account) => $account->remaining_balance > 0);
+            ->filter(function($account) {
+                return $account->remaining_balance > 0;
+            });
 
         return view('reports.pending-fees', compact('accounts'));
     }
 
     /**
-     * Display fee collections on a specific date
+     * Daily collection report - Restricted to self for Clerks
      */
-    public function dailyCollection(Request $request)
+    public function dailyCollection(Request $request): View
     {
+        $role = strtoupper(optional(auth()->user()->role)->role_name ?? '');
         $dateStr = $request->get('date', Carbon::today()->toDateString());
-        $date = Carbon::parse($dateStr);
+        
+        $query = Payment::with(['feeAccount.student', 'receipt', 'collector'])
+            ->whereDate('payment_date', $dateStr)
+            ->where('status', 'SUCCESS');
 
-        $payments = Payment::with(['feeAccount.student', 'collector', 'receipt'])
-            ->whereDate('payment_date', $date)
-            ->where('status', 'SUCCESS')
-            ->get();
+        // CLERK Restriction
+        if ($role === 'CLERK') {
+            $query->where('collected_by', auth()->id());
+        }
 
+        $payments = $query->get();
         $totalCollected = $payments->sum('amount');
 
-        return view('reports.daily-collection', compact('payments', 'totalCollected', 'dateStr'));
+        return view('fees.reports.daily', compact('payments', 'totalCollected', 'dateStr'));
     }
 
     /**
@@ -85,15 +140,16 @@ class ReportController extends Controller
         $academicYears = AcademicYear::all();
         
         $activeYear = AcademicYear::where('is_active', true)->first();
-        $selectedYearId = $request->get('academic_year_id', $activeYear ? $activeYear->id : null);
+        $selectedYearId = $request->get('academic_year_id', $activeYear ? $activeYear->academic_year_id : null);
         $selectedClassId = $request->get('class_id');
 
         $query = StudentFeeAccount::with(['student', 'academicYear'])
-            ->where('academic_year_id', $selectedYearId);
-
-        if ($selectedClassId) {
-            $query->where('class_id', $selectedClassId);
-        }
+            ->whereHas('enrollment', function($q) use ($selectedYearId, $selectedClassId) {
+                $q->where('academic_year_id', $selectedYearId);
+                if ($selectedClassId) {
+                    $q->where('class_id', $selectedClassId);
+                }
+            });
 
         // Fetch and filter accounts locally to accurately handle computed outstanding balances
         $accounts = $query->get()->filter(function ($account) {
@@ -108,20 +164,21 @@ class ReportController extends Controller
     }
 
     /**
-     * Report showing payment collection summary broken down by clerks
+     * Collection per clerk - Accessible by Correspondent/Admin
      */
-    public function clerkCollectionReport(Request $request)
+    public function clerkCollectionReport(Request $request): View
     {
-        $startDate = $request->filled('start_date') ? Carbon::parse($request->start_date)->startOfDay() : Carbon::today()->startOfDay();
-        $endDate = $request->filled('end_date') ? Carbon::parse($request->end_date)->endOfDay() : Carbon::today()->endOfDay();
+        // Gated by role middleware in web.php
+        $startDate = $request->get('start_date', Carbon::today()->startOfMonth()->toDateString());
+        $endDate = $request->get('end_date', Carbon::today()->toDateString());
 
-        $collections = Payment::selectRaw('collected_by, SUM(amount) as total_collected, COUNT(id) as transaction_count')
+        $clerkStats = Payment::selectRaw('collected_by, SUM(amount) as total_amount, COUNT(payment_id) as receipt_count')
             ->with('collector')
             ->whereBetween('payment_date', [$startDate, $endDate])
             ->where('status', 'SUCCESS')
             ->groupBy('collected_by')
             ->get();
 
-        return view('fees.reports.clerk', compact('collections', 'startDate', 'endDate'));
+        return view('fees.reports.clerk', compact('clerkStats', 'startDate', 'endDate'));
     }
 }

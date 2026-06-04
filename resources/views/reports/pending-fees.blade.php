@@ -24,7 +24,7 @@
                             <td class="p-2 border">{{ optional($account->student)->student_name ?? '-' }}</td>
                             <td class="p-2 border">Rs {{ number_format((float) $account->total_due, 2) }}</td>
                             <td class="p-2 border">Rs {{ number_format((float) $account->total_paid, 2) }}</td>
-                            <td class="p-2 border">Rs {{ number_format((float) $account->remaining_balance, 2) }}</td>
+                            <td class="p-2 border text-danger fw-bold">Rs {{ number_format((float) $account->remaining_balance, 2) }}</td>
                         </tr>
                     @empty
                         <tr><td colspan="4" class="p-3 text-center text-gray-500">No pending fee accounts found.</td></tr>

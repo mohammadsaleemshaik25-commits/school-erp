@@ -33,40 +33,92 @@ class PaymentController extends Controller
         $sections = Section::all();
 
         // Scenario A: Clerk selected a student and loaded their checkout ledger
-        if ($request->filled('student_fee_account_id')) {
-            $account = StudentFeeAccount::with(['student', 'academicYear'])
-                ->findOrFail($request->get('student_fee_account_id'));
+        if ($request->filled('account_id')) {
+            $account = StudentFeeAccount::with(['enrollment.student', 'enrollment.academicYear'])
+                ->findOrFail($request->get('account_id'));
         } 
         // Scenario B: Clerk is running a search on the desk
-        elseif ($request->anyFilled(['admission_no', 'student_name', 'class_id', 'section_id'])) {
-            $activeYear = AcademicYear::where('is_active', true)->first();
-            $yearId = $activeYear ? $activeYear->academic_year_id : null;
-
-            $query = StudentFeeAccount::with(['student', 'academicYear'])
-                ->where('academic_year_id', $yearId);
-
-            // Dynamically apply search constraints matching multi-field request
-            $query->whereHas('student', function ($sub) use ($request) {
-                if ($request->filled('admission_no')) {
-                    $sub->where('admission_no', $request->admission_no);
-                }
-                if ($request->filled('student_name')) {
-                    $sub->where('student_name', 'like', "%{$request->student_name}%");
-                }
-            });
-
-            if ($request->filled('class_id')) {
-                $query->where('class_id', $request->class_id);
+        elseif ($request->anyFilled(['q', 'admission_no', 'student_name', 'class_id', 'section_id', 'academic_year_id'])) {
+            $selectedYearId = $request->get('academic_year_id');
+            if (!$selectedYearId) {
+                $activeYear = AcademicYear::where('is_active', true)->first();
+                $selectedYearId = $activeYear ? $activeYear->academic_year_id : null;
             }
 
-            if ($request->filled('section_id')) {
-                $query->where('section_id', $request->section_id);
+            $query = StudentFeeAccount::with(['enrollment.student', 'enrollment.academicYear', 'enrollment.classRoom', 'enrollment.section'])
+                ->whereHas('enrollment', function($q) use ($selectedYearId) {
+                    $q->where('academic_year_id', $selectedYearId);
+                });
+
+            // Universal Search Box (q)
+            if ($request->filled('q')) {
+                $q = $request->q;
+                $query->whereHas('enrollment.student', function ($sub) use ($q) {
+                    $sub->where(function($inner) use ($q) {
+                        $inner->where('admission_no', 'like', "%{$q}%")
+                              ->orWhere('student_name', 'like', "%{$q}%")
+                              ->orWhere('father_name', 'like', "%{$q}%")
+                              ->orWhere('mother_name', 'like', "%{$q}%")
+                              ->orWhere('guardian_name', 'like', "%{$q}%")
+                              ->orWhere('phone_primary', 'like', "%{$q}%")
+                              ->orWhere('phone_secondary', 'like', "%{$q}%");
+                    });
+                });
+            }
+
+            // Individual Filters (These are now in enrollment or enrollment.student)
+            if ($request->filled('admission_no') || $request->filled('student_name')) {
+                $query->whereHas('enrollment.student', function ($sub) use ($request) {
+                    if ($request->filled('admission_no')) {
+                        $sub->where('admission_no', 'like', "%{$request->admission_no}%");
+                    }
+                    if ($request->filled('student_name')) {
+                        $sub->where('student_name', 'like', "%{$request->student_name}%");
+                    }
+                });
+            }
+
+            if ($request->filled('class_id') || $request->filled('section_id')) {
+                $query->whereHas('enrollment', function ($sub) use ($request) {
+                    if ($request->filled('class_id')) {
+                        $sub->where('class_id', $request->class_id);
+                    }
+                    if ($request->filled('section_id')) {
+                        $sub->where('section_id', $request->section_id);
+                    }
+                });
             }
 
             $searchResults = $query->paginate(15)->appends($request->all());
         }
 
         return view('fees.collect', compact('account', 'searchResults', 'classes', 'sections'));
+    }
+
+    /**
+     * Display the student ledger for a specific fee account.
+     */
+    public function ledger(StudentFeeAccount $account)
+    {
+        $account->load([
+            'enrollment.student',
+            'enrollment.academicYear',
+            'enrollment.classRoom',
+            'enrollment.section',
+            'payments' => function($q) {
+                $q->with('receipt', 'collector')->orderBy('payment_date', 'desc');
+            }
+        ]);
+
+        $summary = [
+            'books_paid' => $account->payments()->where('status', 'SUCCESS')->sum('books_fee_paid'),
+            'tuition_paid' => $account->payments()->where('status', 'SUCCESS')->sum('tuition_fee_paid'),
+            'cancelled_payments' => $account->payments()->where('status', 'CANCELLED')->sum('amount'),
+            'total_paid' => $account->total_paid,
+            'outstanding' => $account->remaining_balance
+        ];
+
+        return view('fees.ledger', compact('account', 'summary'));
     }
 
     /**
@@ -88,9 +140,15 @@ class PaymentController extends Controller
                 ], 201);
             }
 
+            if ($payment->receipt) {
+                return redirect()
+                    ->route('fees.receipts.show', $payment->receipt->receipt_id)
+                    ->with('success', 'Payment recorded and receipt generated.');
+            }
+
             return redirect()
-                ->route('fees.receipts.show', $payment->receipt->id)
-                ->with('success', 'Payment of ₹' . number_format($payment->amount, 2) . ' received.');
+                ->route('fees.collect')
+                ->with('success', 'Payment recorded successfully.');
 
         } catch (Exception $e) {
             if ($request->wantsJson()) {
@@ -110,7 +168,7 @@ class PaymentController extends Controller
     /**
      * Cancel a payment transaction
      */
-    public function cancel(Request $request, int $id)
+    public function cancel(Request $request, int $paymentId)
     {
         $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255'
@@ -118,7 +176,7 @@ class PaymentController extends Controller
 
         try {
             $payment = $this->financeService->cancelPayment(
-                $id,
+                $paymentId,
                 $request->get('cancellation_reason'),
                 auth()->id()
             );

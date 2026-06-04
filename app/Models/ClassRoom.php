@@ -6,11 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 
 class ClassRoom extends Model
 {
+    public const UPDATED_AT = null;
+
     protected $table = 'classes';
 
     protected $primaryKey = 'class_id';
 
-    public $timestamps = false;
+    public $timestamps = true;
 
     protected $fillable = [
         'class_name',

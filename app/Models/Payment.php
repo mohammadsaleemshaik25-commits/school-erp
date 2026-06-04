@@ -8,19 +8,23 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Payment extends Model
 {
+    public const UPDATED_AT = null;
+
+    protected $primaryKey = 'payment_id';
+
     protected $fillable = [
-        'student_fee_account_id',
+        'account_id',
+        'collected_by',
+        'fee_component_type',
         'amount',
         'books_fee_paid',
         'tuition_fee_paid',
         'payment_mode',
         'transaction_reference',
         'payment_date',
-        'collected_by',
+        'remarks',
         'status',
-        'cancelled_at',
-        'cancelled_by',
-        'cancellation_reason',
+        'receipt_generated',
     ];
 
     protected $casts = [
@@ -28,26 +32,26 @@ class Payment extends Model
         'books_fee_paid' => 'decimal:2',
         'tuition_fee_paid' => 'decimal:2',
         'payment_date' => 'datetime',
-        'cancelled_at' => 'datetime',
+        'receipt_generated' => 'boolean',
     ];
 
     public function feeAccount(): BelongsTo
     {
-        return $this->belongsTo(StudentFeeAccount::class, 'student_fee_account_id');
+        return $this->belongsTo(StudentFeeAccount::class, 'account_id', 'account_id');
     }
 
     public function collector(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'collected_by');
+        return $this->belongsTo(User::class, 'collected_by', 'user_id');
     }
 
     public function canceller(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'cancelled_by');
+        return $this->belongsTo(User::class, 'cancelled_by', 'user_id');
     }
 
     public function receipt(): HasOne
     {
-        return $this->hasOne(Receipt::class);
+        return $this->hasOne(Receipt::class, 'payment_id', 'payment_id');
     }
 }

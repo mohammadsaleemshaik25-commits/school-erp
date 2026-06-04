@@ -83,27 +83,25 @@ return new class extends Migration
 
         if (! Schema::hasTable('student_fee_accounts')) {
             Schema::create('student_fee_accounts', function (Blueprint $table): void {
-                $table->id();
-                $table->unsignedBigInteger('student_id');
-                $table->unsignedBigInteger('academic_year_id');
-                $table->unsignedBigInteger('class_id');
-                $table->decimal('tuition_fee', 10, 2)->default(0);
+                $table->bigIncrements('account_id');
+                $table->unsignedBigInteger('enrollment_id');
+                $table->unsignedBigInteger('fee_structure_id')->nullable();
+                $table->decimal('discount_amount', 10, 2)->default(0);
                 $table->decimal('books_fee_applied', 10, 2)->default(0);
-                $table->decimal('previous_balance_carried', 10, 2)->default(0);
-                $table->decimal('concession_amount', 10, 2)->default(0);
-                $table->decimal('total_due', 10, 2)->default(0);
-                $table->decimal('total_paid', 10, 2)->default(0);
-                $table->string('status', 20)->default('UNPAID');
-                $table->decimal('final_tuition_fee', 10, 2)->default(0);
+                $table->decimal('books_fee', 10, 2)->default(0);
+                $table->decimal('net_fee', 10, 2)->default(0);
+                $table->decimal('previous_balance', 10, 2)->default(0);
                 $table->decimal('waived_amount', 10, 2)->default(0);
-                $table->timestamps();
+                $table->decimal('total_due', 10, 2)->default(0);
+                $table->string('status', 20)->default('UNPAID');
+                $table->timestamp('created_at')->nullable();
             });
         }
 
         if (! Schema::hasTable('payments')) {
             Schema::create('payments', function (Blueprint $table): void {
-                $table->id();
-                $table->unsignedBigInteger('student_fee_account_id');
+                $table->bigIncrements('payment_id');
+                $table->unsignedBigInteger('account_id');
                 $table->decimal('amount', 10, 2);
                 $table->decimal('books_fee_paid', 10, 2)->default(0);
                 $table->decimal('tuition_fee_paid', 10, 2)->default(0);
@@ -115,26 +113,26 @@ return new class extends Migration
                 $table->timestamp('cancelled_at')->nullable();
                 $table->unsignedBigInteger('cancelled_by')->nullable();
                 $table->string('cancellation_reason', 255)->nullable();
-                $table->timestamps();
+                $table->timestamp('created_at')->nullable();
             });
         }
 
         if (! Schema::hasTable('receipts')) {
             Schema::create('receipts', function (Blueprint $table): void {
-                $table->id();
+                $table->bigIncrements('receipt_id');
                 $table->unsignedBigInteger('payment_id');
                 $table->string('receipt_number', 50)->unique();
                 $table->string('status', 20)->default('ACTIVE');
                 $table->timestamp('cancelled_at')->nullable();
                 $table->unsignedBigInteger('cancelled_by')->nullable();
-                $table->timestamps();
+                $table->timestamp('created_at')->nullable();
             });
         }
 
         if (! Schema::hasTable('student_fee_adjustments')) {
             Schema::create('student_fee_adjustments', function (Blueprint $table): void {
-                $table->id();
-                $table->unsignedBigInteger('student_fee_account_id');
+                $table->bigIncrements('student_fee_adjustment_id');
+                $table->unsignedBigInteger('account_id');
                 $table->string('adjustment_type', 40);
                 $table->string('sub_type', 60)->nullable();
                 $table->decimal('amount', 10, 2);
@@ -144,7 +142,7 @@ return new class extends Migration
                 $table->string('status', 20)->default('PENDING');
                 $table->timestamp('decided_at')->nullable();
                 $table->text('decision_remarks')->nullable();
-                $table->timestamps();
+                $table->timestamp('created_at')->nullable();
             });
         }
     }

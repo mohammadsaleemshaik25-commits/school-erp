@@ -1,77 +1,83 @@
 @extends('fees.layout')
 
-@section('title', 'Daily Revenue Collection')
+@section('title', 'Daily Collection Log')
 
 @section('content')
+<div class="container-fluid">
 <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
-    <h1 class="h3 mb-0 text-gray-800">Daily Revenue Collection</h1>
-    <form action="{{ route('reports.daily') }}" method="GET" class="d-flex gap-2 align-items-center">
-        <input type="date" name="date" value="{{ $dateStr }}" class="form-control form-control-sm shadow-sm">
-        <button type="submit" class="btn btn-primary btn-sm shadow-sm">
-            <i class="bi bi-filter me-1"></i> Filter Date
+    <div>
+        <h1 class="h4 mb-0 fw-bold">Daily Collection Log</h1>
+        <p class="text-muted small mb-0">Collections recorded on {{ \Carbon\Carbon::parse($dateStr)->format('d F Y') }}.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <form action="{{ route('fees.reports.daily') }}" method="GET" class="d-flex gap-2">
+            <input type="date" name="date" value="{{ $dateStr }}" class="form-control form-control-sm rounded-pill px-3 shadow-none">
+            <button type="submit" class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm">
+                <i class="bi bi-filter me-1"></i> Filter
+            </button>
+        </form>
+        <button onclick="window.print()" class="btn btn-outline-secondary btn-sm rounded-pill px-3 shadow-sm d-print-none">
+            <i class="bi bi-printer me-1"></i> Print
         </button>
-    </form>
+    </div>
 </div>
 
-<!-- Summary Card -->
-<div class="card bg-primary text-white shadow-sm mb-4">
-    <div class="card-body d-flex justify-content-between align-items-center py-4">
+{{-- Summary Card --}}
+<div class="card border-0 shadow-sm rounded-4 mb-4 bg-primary text-white overflow-hidden position-relative">
+    <div class="card-body p-4 d-flex justify-content-between align-items-center">
         <div>
-            <h6 class="text-white-50 text-uppercase small fw-bold mb-1">Total Collections Recorded for {{ \Carbon\Carbon::parse($dateStr)->format('d F Y') }}</h6>
-            <p class="h2 fw-extrabold font-monospace mb-0">₹{{ number_format($totalCollected, 2) }}</p>
+            <div class="small text-uppercase fw-bold opacity-75 mb-1" style="font-size: 0.7rem; letter-spacing: 1px;">Total Revenue for {{ \Carbon\Carbon::parse($dateStr)->format('M d, Y') }}</div>
+            <div class="h2 fw-bold mb-0">₹{{ number_format($totalCollected, 2) }}</div>
         </div>
-        <button onclick="window.print()" class="btn btn-light btn-sm fw-bold shadow-sm d-print-none">
-            <i class="bi bi-printer me-1"></i> Print Report
-        </button>
+        <div class="text-end">
+            <div class="small text-uppercase fw-bold opacity-75 mb-1" style="font-size: 0.7rem;">Transactions</div>
+            <div class="h3 fw-bold mb-0">{{ $payments->count() }}</div>
+        </div>
+        <i class="bi bi-cash-stack position-absolute end-0 top-0 opacity-10" style="font-size: 6rem; margin-right: -20px; margin-top: -20px;"></i>
     </div>
 </div>
 
-<div class="card shadow-sm">
-    <div class="card-header bg-white py-3">
-        <h6 class="m-0 font-weight-bold text-primary small text-uppercase">Collection Log</h6>
-    </div>
+<div class="card border-0 shadow-sm rounded-4 overflow-hidden">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th class="small fw-bold text-muted text-uppercase px-4">Receipt No</th>
-                    <th class="small fw-bold text-muted text-uppercase">Student</th>
-                    <th class="small fw-bold text-muted text-uppercase text-center">Mode</th>
-                    <th class="small fw-bold text-muted text-uppercase">Recorded By</th>
-                    <th class="small fw-bold text-muted text-uppercase text-end px-4">Amount</th>
+            <thead class="bg-light">
+                <tr class="small text-uppercase fw-bold text-muted" style="letter-spacing: 0.5px;">
+                    <th class="px-4 py-3">Receipt No.</th>
+                    <th class="py-3">Student Name</th>
+                    <th class="py-3 text-center">Mode</th>
+                    <th class="py-3">Collector</th>
+                    <th class="px-4 py-3 text-end">Amount</th>
                 </tr>
             </thead>
-            <tbody class="font-monospace small">
+            <tbody class="small font-monospace">
                 @forelse($payments as $p)
                     <tr>
-                        <td class="px-4 fw-bold text-primary">
-                            {{ $p->receipt->receipt_number ?? 'N/A' }}
-                        </td>
-                        <td class="font-sans fw-semibold">
-                            {{ $p->feeAccount->student->student_name }}
+                        <td class="px-4 fw-bold text-primary">{{ $p->receipt?->receipt_number ?? 'N/A' }}</td>
+                        <td class="font-sans">
+                            <div class="fw-bold text-dark">{{ $p->feeAccount?->student?->student_name ?? 'N/A' }}</div>
+                            <div class="small text-muted" style="font-size: 0.7rem;">{{ $p->feeAccount?->student?->admission_no ?? '-' }}</div>
                         </td>
                         <td class="text-center">
-                            <span class="badge rounded-pill {{ $p->payment_mode === 'UPI' ? 'bg-info-subtle text-info border border-info' : 'bg-success-subtle text-success border border-success' }}">
-                                {{ $p->payment_mode }}
-                            </span>
+                            <span class="badge bg-light text-dark border fw-normal">{{ $p->payment_mode }}</span>
                         </td>
-                        <td class="font-sans text-muted">
-                            {{ $p->collector->full_name ?? $p->collector->username }}
+                        <td class="font-sans text-muted small">
+                            {{ $p->collector?->full_name ?? $p->collector?->username ?? 'N/A' }}
                         </td>
-                        <td class="text-end fw-bold px-4">
+                        <td class="px-4 text-end fw-bold text-dark">
                             ₹{{ number_format($p->amount, 2) }}
                         </td>
                     </tr>
                 @empty
                     <tr>
                         <td colspan="5" class="text-center py-5 text-muted font-sans">
-                            <i class="bi bi-calendar-x h1 d-block mb-2"></i>
-                            No collections recorded for this date.
+                            <i class="bi bi-calendar-x fs-1 d-block mb-3 opacity-25"></i>
+                            No successful collections recorded for this date.
                         </td>
                     </tr>
                 @endforelse
             </tbody>
         </table>
     </div>
+</div>
 </div>
 @endsection
