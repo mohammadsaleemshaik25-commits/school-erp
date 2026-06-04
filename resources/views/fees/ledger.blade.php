@@ -4,6 +4,20 @@
 
 @section('content')
 <div class="container-fluid">
+
+    <div class="text-center mb-4">
+        <img src="{{ asset('build/assets/school/logo.png') }}"
+             alt="School Logo"
+             style="height:80px;width:auto;">
+
+        <h3 class="fw-bold mt-2 mb-0">
+            VIKAS HIGH SCHOOL
+        </h3>
+
+        <p class="text-muted mb-0">
+            Student Financial Ledger
+        </p>
+    </div>
     <div class="d-flex justify-content-between align-items-center mb-4 d-print-none">
         <div>
             <h1 class="h4 mb-0 fw-bold text-dark">Student Ledger</h1>
@@ -182,6 +196,26 @@
     </div>
 
     <div class="mt-5 text-center d-none d-print-block">
+
+    <img src="{{ asset('build/assets/school/logo.png') }}"
+         alt="School Logo"
+         style="height:70px;width:auto;margin-bottom:10px;">
+
+    <h5 class="fw-bold">
+        VIKAS HIGH SCHOOL
+    </h5>
+
+    <hr>
+
+    <p class="small text-muted">
+        This is a system-generated student ledger report.
+    </p>
+
+    <p class="small text-muted">
+        Printed on: {{ now()->format('d-m-Y H:i:s') }}
+    </p>
+
+</div>
         <hr>
         <p class="small text-muted">This is a system-generated student ledger report.</p>
         <p class="small text-muted">Printed on: {{ now()->format('d-m-Y H:i:s') }}</p>

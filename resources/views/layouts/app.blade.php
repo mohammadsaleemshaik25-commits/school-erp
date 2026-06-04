@@ -10,10 +10,21 @@
 <body class="bg-slate-100 text-slate-900 min-h-screen">
     <header class="bg-indigo-900 text-white shadow">
         <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div>
-                <p class="text-xs uppercase tracking-wider text-indigo-200">School ERP</p>
-                <h1 class="font-semibold">Vikas High School</h1>
-            </div>
+            <div class="flex items-center gap-3">
+    <img src="{{ asset('build/assets/school/logo.png') }}"
+         alt="School Logo"
+         class="h-12 w-12 rounded-full bg-white p-1">
+
+    <div>
+        <p class="text-xs uppercase tracking-wider text-indigo-200">
+            School ERP
+        </p>
+
+        <h1 class="font-semibold">
+            Vikas High School
+        </h1>
+    </div>
+</div>
             <div class="flex items-center gap-4">
                 <span class="text-sm hidden sm:block">{{ auth()->user()->full_name ?? auth()->user()->username }}</span>
                 <form action="{{ route('logout') }}" method="POST">
@@ -26,6 +37,16 @@
 
     <div class="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6">
         <aside class="bg-white border rounded-lg p-3 h-fit">
+
+    <div class="text-center border-b pb-3 mb-3">
+        <img src="{{ asset('build/assets/school/logo.png') }}"
+             alt="School Logo"
+             class="mx-auto h-20 w-20 object-contain">
+
+        <h3 class="mt-2 font-bold text-indigo-900">
+            Vikas High School
+        </h3>
+    </div>
             <nav class="space-y-2 text-sm">
                 <a href="{{ route('dashboard') }}" class="block px-3 py-2 rounded hover:bg-slate-100">Dashboard</a>
                 <a href="{{ route('reports.student') }}" class="block px-3 py-2 rounded hover:bg-slate-100">Student Report</a>

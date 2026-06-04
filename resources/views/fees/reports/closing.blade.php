@@ -4,7 +4,15 @@
 
 @section('content')
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4 d-print-none">
+    <div class="text-center mb-4">
+    <img src="{{ asset('build/assets/school/logo.png') }}"
+         alt="School Logo"
+         style="height:80px; width:auto;">
+
+    <h3 class="fw-bold mt-2 mb-0">VIKAS HIGH SCHOOL</h3>
+    <p class="text-muted mb-0">Daily Closing Report</p>
+</div>
+   
         <div>
             <h1 class="h4 mb-0 fw-bold text-dark">Clerk Daily Closing Report</h1>
             <p class="text-muted small mb-0">Summary of collections for the selected date</p>
@@ -158,6 +166,24 @@
     @endif
 
     <div class="mt-5 text-center d-none d-print-block">
+
+    <img src="{{ asset('build/assets/school/logo.png') }}"
+         alt="School Logo"
+         style="height:70px; width:auto; margin-bottom:10px;">
+
+    <hr>
+
+    <h5 class="fw-bold">VIKAS HIGH SCHOOL</h5>
+
+    <p class="small mb-1">
+        Daily Closing Report -
+        {{ Carbon\Carbon::parse($dateStr)->format('d-m-Y') }}
+    </p>
+
+    <p class="small mb-4">
+        Clerk:
+        {{ $selectedClerk?->full_name ?? $selectedClerk?->username }}
+    </p>
         <hr>
         <h5 class="fw-bold">VIKAS HIGH SCHOOL</h5>
         <p class="small mb-1">Daily Closing Report - {{ Carbon\Carbon::parse($dateStr)->format('d-m-Y') }}</p>

@@ -39,9 +39,34 @@
         <button onclick="window.print()">Print Receipt</button>
         <a href="{{ route('fees.receipts.show', $receipt->receipt_id) }}">Back to Receipt</a>
     </div>
+           <div class="header text-center">
 
-    <div class="header text-center">
-        <h2>VIKAS HIGH SCHOOL</h2>
+    <img src="{{ public_path('build/assets/school/logo.png') }}"
+         alt="School Logo"
+         style="width:60px;height:60px;margin-bottom:5px;">
+
+    <h2>VIKAS HIGH SCHOOL</h2>
+
+    <p>Main Road, School Campus</p>
+    <p>Contact: +91 XXXXXXXXXX</p>
+
+    <h3>FEE RECEIPT</h3>
+
+    @if($receipt->status === 'CANCELLED')
+        <h2 style="color: red; border: 2px solid red; padding: 3px; display: inline-block;">
+            ** CANCELLED **
+        </h2>
+    @endif
+
+    @if($receipt->is_duplicate)
+        <div style="border: 1px solid #000; padding: 2px; margin: 5px 0;">
+            *** DUPLICATE RECEIPT ***<br>
+            Print Count: {{ $receipt->printed_count }}<br>
+            Original: {{ $receipt->generated_datetime->format('d-M-Y H:i') }}
+        </div>
+    @endif
+
+</div>
         <p>Main Road, School Campus</p>
         <p>Contact: +91 XXXXXXXXXX</p>
         <h3>FEE RECEIPT</h3>

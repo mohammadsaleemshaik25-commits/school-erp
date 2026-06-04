@@ -9,10 +9,22 @@
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
 
     <div class="bg-white p-8 rounded-lg shadow-md max-w-md w-full border border-gray-200">
-        <div class="text-center mb-6">
-            <span class="text-3xl font-extrabold text-indigo-900 block">VIKAS ERP</span>
-            <p class="text-gray-500 text-sm mt-1">Authorized Administration Sign In</p>
-        </div>
+       <div class="text-center mb-6">
+
+    <img src="{{ asset('build/assets/school/logo.png') }}"
+     alt="School Logo"
+     class="mx-auto mb-3"
+     style="height:90px; width:auto;">
+
+    <span class="text-3xl font-extrabold text-indigo-900 block">
+        VIKAS HIGH SCHOOL
+    </span>
+
+    <p class="text-gray-500 text-sm mt-1">
+        ERP Portal - Authorized Administration Sign In
+    </p>
+
+</div>
 
         @if($errors->any())
             <div class="bg-red-50 text-red-700 p-3 rounded mb-4 text-xs">
