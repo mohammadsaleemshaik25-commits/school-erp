@@ -217,7 +217,7 @@ class FinanceService
      */
     public function requestAdjustment(array $data, int $requesterId): StudentFeeAdjustment
     {
-        return StudentFeeAdjustment::create([
+        $adjustment = StudentFeeAdjustment::create([
             'account_id' => $data['account_id'],
             'adjustment_type' => $data['adjustment_type'],
             'discount_amount' => $data['discount_amount'],
@@ -226,6 +226,17 @@ class FinanceService
             'requested_by' => $requesterId,
             'approval_status' => 'PENDING',
         ]);
+
+        AuditLog::create([
+            'user_id' => $requesterId,
+            'action' => 'CONCESSION_REQUESTED',
+            'table_name' => 'student_fee_adjustments',
+            'record_id' => $adjustment->adjustment_id,
+            'new_value' => json_encode($data),
+            'ip_address' => request()->ip()
+        ]);
+
+        return $adjustment;
     }
 
     /**
@@ -246,6 +257,8 @@ class FinanceService
                 throw new InvalidArgumentException("This adjustment request has already been processed.");
             }
 
+            $oldStatus = $adjustment->approval_status;
+
             $adjustment->update([
                 'approval_status' => $status === 'APPROVED' ? 'APPROVED' : 'REJECTED',
                 'approved_by' => $deciderId,
@@ -258,114 +271,52 @@ class FinanceService
                     ->lockForUpdate()
                     ->firstOrFail();
 
+                $oldWaived = $feeAccount->waived_amount;
                 $feeAccount->waived_amount = (float) $feeAccount->waived_amount + (float) $adjustment->discount_amount;
                 $feeAccount->recalculateTotals();
                 $feeAccount->save();
-            }
 
-            $this->logAction(
-                $deciderId,
-                'FEE_ADJUSTMENT_DECISION',
-                "Adjustment ID: {$adjustment->adjustment_id} resolved to {$status}. Remarks: {$remarks}"
-            );
+                AuditLog::create([
+                    'user_id' => $deciderId,
+                    'action' => 'CONCESSION_APPROVED',
+                    'table_name' => 'student_fee_accounts',
+                    'record_id' => $feeAccount->account_id,
+                    'old_value' => $oldWaived,
+                    'new_value' => $feeAccount->waived_amount,
+                    'ip_address' => request()->ip()
+                ]);
+            } else {
+                AuditLog::create([
+                    'user_id' => $deciderId,
+                    'action' => 'CONCESSION_REJECTED',
+                    'table_name' => 'student_fee_adjustments',
+                    'record_id' => $adjustment->adjustment_id,
+                    'old_value' => $oldStatus,
+                    'new_value' => 'REJECTED',
+                    'ip_address' => request()->ip()
+                ]);
+            }
 
             return $adjustment;
         });
     }
 
     /**
-     * Generate unique sequence-locked receipts: REC-[START_YEAR]-[6-DIGIT-SEQUENCE]
+     * Helper to log actions to audit_logs
      */
-    protected function generateReceiptNumber(AcademicYear $academicYear): string
-    {
-        $yearPart = explode('-', (string) $academicYear->year_name)[0] ?? date('Y');
-
-        // Lock existing receipt records for matching year to construct safe sequential counter
-        $lastReceipt = Receipt::where('receipt_number', 'LIKE', "REC-{$yearPart}-%")
-            ->lockForUpdate()
-            ->orderBy('receipt_id', 'desc')
-            ->first();
-
-        $nextSequence = 1;
-        if ($lastReceipt) {
-            $parts = explode('-', $lastReceipt->receipt_number);
-            if (isset($parts[2])) {
-                $nextSequence = ((int) $parts[2]) + 1;
-            }
-        }
-
-        return sprintf("REC-%s-%06d", $yearPart, $nextSequence);
-    }
-
-    /**
-     * Update the books purchase decision for a student.
-     * This is a one-time decision that freezes the books fee status.
-     */
-    public function updateBooksDecision(int $accountId, string $decision, int $clerkId): StudentFeeAccount
-    {
-        return DB::transaction(function () use ($accountId, $decision, $clerkId) {
-            $feeAccount = StudentFeeAccount::where('account_id', $accountId)
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            if ($feeAccount->books_status !== 'PENDING') {
-                throw new Exception("Books decision has already been finalized for this account.");
-            }
-
-            // Check if any books payment already exists
-            $booksPaid = $feeAccount->payments()
-                ->where('status', 'SUCCESS')
-                ->where('books_fee_paid', '>', 0)
-                ->exists();
-            
-            if ($booksPaid) {
-                throw new Exception("Cannot change books status because books payments have already been recorded.");
-            }
-
-            if ($decision === 'SCHOOL') {
-                $feeAccount->books_status = 'SCHOOL';
-                $feeAccount->books_from_school = true;
-                // net_fee remains Tuition + Books
-            } elseif ($decision === 'OUTSIDE') {
-                $feeAccount->books_status = 'OUTSIDE';
-                $feeAccount->books_from_school = false;
-                $feeAccount->books_fee_applied = 0.00;
-                $feeAccount->net_fee = $feeAccount->final_tuition_fee; // CRITICAL: Reset net_fee to tuition only
-                $feeAccount->waived_amount += (float) $feeAccount->books_fee;
-                $feeAccount->waived_by = $clerkId;
-                $feeAccount->waived_date = now();
-            } else {
-                throw new InvalidArgumentException("Invalid books decision.");
-            }
-
-            $feeAccount->recalculateTotals();
-            $feeAccount->save();
-
-            $this->logAction(
-                $clerkId,
-                'BOOKS_DECISION',
-                "Updated books decision to {$decision} for Student Fee Account ID: {$feeAccount->account_id}"
-            );
-
-            return $feeAccount;
-        });
-    }
-
-    /**
-     * Internal helper to log actions to audit_logs table.
-     */
-    protected function logAction(int $userId, string $action, string $details): void
+    protected function logAction(int $userId, string $action, string $newValue, ?string $tableName = null, ?int $recordId = null): void
     {
         AuditLog::create([
             'user_id' => $userId,
             'action' => $action,
-            'table_name' => 'student_fee_accounts',
-            'record_id' => null, // Can be refined
+            'table_name' => $tableName ?? 'finance',
+            'record_id' => $recordId,
             'old_value' => null,
-            'new_value' => $details,
+            'new_value' => $newValue,
             'ip_address' => request()->ip(),
         ]);
     }
+            
 
     /**
      * Mark a receipt as duplicated and increment print count.

@@ -133,8 +133,13 @@
             </div>
             <div class="col-md-3">
                 <div class="card border-0 shadow-sm bg-white p-4 h-100 border-start border-warning border-4">
-                    <p class="text-sm text-muted text-uppercase fw-bold small mb-2">Academic Years</p>
-                    <p class="h2 font-semibold text-indigo-900 mb-0">{{ number_format($academicYears) }}</p>
+                    <p class="text-sm text-muted text-uppercase fw-bold small mb-2">Pending Concessions</p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <p class="h2 font-semibold text-indigo-900 mb-0">{{ number_format($stats['pending_concessions']) }}</p>
+                        @if($stats['pending_concessions'] > 0)
+                            <a href="{{ route('fees.adjustments.index', ['status' => 'PENDING']) }}" class="btn btn-sm btn-warning rounded-pill px-3 fw-bold">Review</a>
+                        @endif
+                    </div>
                 </div>
             </div>
         </div>

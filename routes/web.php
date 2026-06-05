@@ -65,7 +65,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         });
 
         Route::get('/fees/adjustments', [FeeAdjustmentController::class, 'index'])->name('fees.adjustments.index');
-        Route::post('/fees/adjustments', [FeeAdjustmentController::class, 'store']);
+        Route::get('/fees/adjustments/search', [FeeAdjustmentController::class, 'searchAccounts'])->name('fees.adjustments.search');
+        Route::post('/fees/adjustments', [FeeAdjustmentController::class, 'store'])->name('fees.adjustments.store');
         Route::patch('/fees/books-fee/{accountId}', [BooksFeeController::class, 'update'])->name('fees.books.update');
 
         Route::get('/students', [StudentController::class, 'index']);

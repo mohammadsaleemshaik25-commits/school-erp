@@ -75,6 +75,7 @@ class DashboardController extends Controller
             'pending_books' => StudentFeeAccount::where('books_status', 'PENDING')->whereHas('enrollment', function($q) use ($activeYear) {
                 $q->where('academic_year_id', $activeYear->academic_year_id);
             })->count(),
+            'pending_concessions' => \App\Models\StudentFeeAdjustment::where('approval_status', 'PENDING')->count(),
         ];
 
         $totalStudents = $stats['total_students'];
