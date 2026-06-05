@@ -27,6 +27,17 @@
             <button onclick="window.print()" class="btn btn-outline-secondary btn-sm rounded-pill px-3 shadow-sm">
                 <i class="bi bi-printer me-1"></i> Print Ledger
             </button>
+            <button type="button" class="btn btn-warning btn-sm rounded-pill px-3 shadow-sm" 
+                    onclick="openConcessionModal({
+                        account_id: '{{ $account->account_id }}',
+                        student_name: '{{ addslashes($account->student->student_name) }}',
+                        admission_no: '{{ $account->student->admission_no }}',
+                        class_name: '{{ $account->classRoom->class_name }}',
+                        tuition_fee: '{{ $account->final_tuition_fee }}',
+                        current_due: '{{ $account->remaining_balance }}'
+                    })">
+                <i class="bi bi-percent me-1"></i> Request Concession
+            </button>
             <a href="{{ route('fees.collect', ['account_id' => $account->account_id]) }}" class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm">
                 <i class="bi bi-currency-rupee me-1"></i> Collect Fee
             </a>

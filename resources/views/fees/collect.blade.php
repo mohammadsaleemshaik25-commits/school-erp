@@ -187,6 +187,17 @@
                                         <a href="{{ route('fees.collect', ['account_id' => $res->account_id]) }}" class="btn btn-primary btn-sm rounded-pill shadow-sm px-3">
                                             Collect Fee
                                         </a>
+                                        <button type="button" class="btn btn-warning btn-sm rounded-pill shadow-sm px-3 ms-1" 
+                                                onclick="openConcessionModal({
+                                                    account_id: '{{ $res->account_id }}',
+                                                    student_name: '{{ addslashes($res->student->student_name) }}',
+                                                    admission_no: '{{ $res->student->admission_no }}',
+                                                    class_name: '{{ $res->classRoom->class_name }}',
+                                                    tuition_fee: '{{ $res->final_tuition_fee }}',
+                                                    current_due: '{{ $res->remaining_balance }}'
+                                                })">
+                                            Concession
+                                        </button>
                                         <a href="{{ route('fees.ledger', $res->account_id) }}" class="btn btn-outline-secondary btn-sm rounded-pill shadow-sm px-3 ms-1">
                                             Ledger
                                         </a>
@@ -350,7 +361,22 @@
                             <h5 class="fw-bold text-dark">Account Paid In Full</h5>
                             <p class="text-muted small px-3">This student has no outstanding balance for the current session.</p>
                         </div>
-                    @elseif($account->books_status === 'PENDING')
+                    @else
+                        <div class="mb-4">
+                            <button type="button" class="btn btn-warning w-100 py-2 fw-bold rounded-pill shadow-sm" 
+                                    onclick="openConcessionModal({
+                                        account_id: '{{ $account->account_id }}',
+                                        student_name: '{{ addslashes($account->student->student_name) }}',
+                                        admission_no: '{{ $account->student->admission_no }}',
+                                        class_name: '{{ $account->classRoom->class_name }}',
+                                        tuition_fee: '{{ $account->final_tuition_fee }}',
+                                        current_due: '{{ $account->remaining_balance }}'
+                                    })">
+                                <i class="bi bi-percent me-2"></i> Request Concession
+                            </button>
+                        </div>
+
+                        @if($account->books_status === 'PENDING')
                         {{-- BOOKS DECISION CARD --}}
                         <div class="p-3 bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded-4 mb-4">
                             <h6 class="fw-bold text-warning-emphasis mb-3">
@@ -445,42 +471,63 @@
                             </div>
 
                             @if($account->books_status === 'SCHOOL')
-                                <div class="p-3 bg-light rounded-4 mb-4 border-start border-primary border-4">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <span class="small fw-bold text-muted text-uppercase" style="font-size: 0.65rem;">Books Fee Status</span>
-                                        <span class="badge bg-primary rounded-pill">SCHOOL PURCHASE</span>
-                                    </div>
-                                    <div class="small text-muted">
-                                        Books fee (₹{{ number_format($account->books_fee_applied, 2) }}) will be collected first.
-                                    </div>
-                                </div>
-                            @elseif($account->books_status === 'BOOKS_PAID')
-                                <div class="p-3 bg-success bg-opacity-10 rounded-4 mb-4 border-start border-success border-4">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <span class="small fw-bold text-muted text-uppercase" style="font-size: 0.65rem;">Books Fee Status</span>
-                                        <span class="badge bg-success rounded-pill">PAID & FROZEN</span>
-                                    </div>
-                                    <div class="small text-muted">
-                                        All payments will now go toward tuition fee.
-                                    </div>
-                                </div>
-                            @elseif($account->books_status === 'OUTSIDE')
-                                <div class="p-3 bg-info bg-opacity-10 rounded-4 mb-4 border-start border-info border-4">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <span class="small fw-bold text-muted text-uppercase" style="font-size: 0.65rem;">Books Fee Status</span>
-                                        <span class="badge bg-info rounded-pill">PURCHASED OUTSIDE</span>
-                                    </div>
-                                    <div class="small text-muted">
-                                        Books fee waived. All payments go toward tuition fee.
-                                    </div>
-                                </div>
-                            @endif
+    <div class="p-3 bg-light rounded-4 mb-4 border-start border-primary border-4">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="small fw-bold text-muted text-uppercase" style="font-size: 0.65rem;">
+                Books Fee Status
+            </span>
+            <span class="badge bg-primary rounded-pill">SCHOOL PURCHASE</span>
+        </div>
+        <div class="small text-muted">
+            Books fee (₹{{ number_format($account->books_fee_applied, 2) }}) will be collected first.
+        </div>
+    </div>
 
-                            <div class="mb-4 d-none" id="ref_container">
+@elseif($account->books_status === 'BOOKS_PAID')
+
+    <div class="p-3 bg-success bg-opacity-10 rounded-4 mb-4 border-start border-success border-4">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="small fw-bold text-muted text-uppercase" style="font-size: 0.65rem;">
+                Books Fee Status
+            </span>
+            <span class="badge bg-success rounded-pill">PAID & FROZEN</span>
+        </div>
+        <div class="small text-muted">
+            All payments will now go toward tuition fee.
+        </div>
+    </div>
+
+@elseif($account->books_status === 'OUTSIDE')
+
+    <div class="p-3 bg-info bg-opacity-10 rounded-4 mb-4 border-start border-info border-4">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="small fw-bold text-muted text-uppercase" style="font-size: 0.65rem;">
+                Books Fee Status
+            </span>
+            <span class="badge bg-info rounded-pill">PURCHASED OUTSIDE</span>
+        </div>
+        <div class="small text-muted">
+            Books fee waived. All payments go toward tuition fee.
+        </div>
+    </div>
+
+@endif
+
+<div class="mb-4 d-none" id="ref_container">
+    <label class="form-label small fw-bold text-muted text-uppercase mb-2">
+        UPI / Reference Number
+    </label>
+    <input type="text"
+           name="transaction_reference"
+           id="transaction_reference"
+           class="form-control rounded-3"
+           placeholder="Enter Transaction ID">
+</div>
                                 <label class="form-label small fw-bold text-muted text-uppercase mb-2">UPI / Reference Number</label>
                                 <input type="text" name="transaction_reference" id="transaction_reference"
                                        class="form-control rounded-3" placeholder="Enter Transaction ID">
                             </div>
+                            @endif
 
                             <button type="button" id="submitPaymentBtn"
         class="btn btn-primary btn-lg w-100 py-3 fw-bold shadow rounded-4 mt-2"

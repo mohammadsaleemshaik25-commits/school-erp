@@ -82,6 +82,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/student-report', [ReportController::class, 'studentReport'])->name('reports.student');
         Route::get('/fees/reports/daily', [ReportController::class, 'dailyCollection'])->name('fees.reports.daily');
         Route::get('/fees/reports/closing', [ReportController::class, 'clerkDailyClosing'])->name('fees.reports.closing');
+        Route::get('/fees/reports/concessions', [ReportController::class, 'concessionReport'])->name('fees.reports.concessions');
 
         Route::prefix('api')->group(function () {
             Route::get('/students', [StudentApiController::class, 'index']);

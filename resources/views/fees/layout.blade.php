@@ -205,6 +205,10 @@ function openCancelModal(cancelUrl, receiptNumber) {
                         <i class="bi bi-person-lines-fill me-3 fs-5"></i>
                         <span class="fw-semibold">Clerk Report</span>
                     </a>
+                    <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('fees.reports.concessions') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('fees.reports.concessions') }}">
+                        <i class="bi bi-file-earmark-bar-graph me-3 fs-5"></i>
+                        <span class="fw-semibold">Concession Report</span>
+                    </a>
                 @endif
             </nav>
             
@@ -219,9 +223,115 @@ function openCancelModal(cancelUrl, receiptNumber) {
         @yield('content')
     </main>
 
+    <!-- Global Concession Request Modal -->
+    <div class="modal fade" id="concessionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header bg-primary text-white py-3">
+                    <h6 class="modal-title fw-bold"><i class="bi bi-percent me-2"></i> Request Fee Concession</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form action="{{ route('fees.adjustments.store') }}" method="POST" id="concessionForm">
+                    @csrf
+                    <input type="hidden" name="account_id" id="modal_account_id">
+                    <div class="modal-body p-4">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label small fw-bold text-muted text-uppercase">Student Details</label>
+                                <div class="p-3 bg-light rounded-3 border">
+                                    <div class="fw-bold text-dark" id="modal_student_name">Loading...</div>
+                                    <div class="small text-muted" id="modal_admission_no">...</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="p-2 bg-light rounded-3 border text-center">
+                                    <div class="small text-muted text-uppercase fw-bold" style="font-size: 0.6rem;">Tuition Fee</div>
+                                    <div class="fw-bold text-primary" id="modal_tuition_fee">₹0</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="p-2 bg-light rounded-3 border text-center">
+                                    <div class="small text-muted text-uppercase fw-bold" style="font-size: 0.6rem;">Current Due</div>
+                                    <div class="fw-bold text-danger" id="modal_current_due">₹0</div>
+                                </div>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label small fw-bold text-muted text-uppercase">Adjustment Type <span class="text-danger">*</span></label>
+                                <select name="adjustment_type" class="form-select border-primary shadow-none" required>
+                                    <option value="CONCESSION">CONCESSION</option>
+                                    <option value="WAIVER">WAIVER</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-muted text-uppercase">Discount %</label>
+                                <input type="number" name="discount_percent" id="modal_discount_percent" class="form-control border-primary shadow-none" step="0.01" min="0" max="100" placeholder="e.g. 10">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-muted text-uppercase">Amount (₹)</label>
+                                <input type="number" name="discount_amount" id="modal_discount_amount" class="form-control border-primary shadow-none" step="0.01" min="0" placeholder="0.00">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold text-muted text-uppercase">Reason <span class="text-danger">*</span></label>
+                                <textarea name="reason" class="form-control border-primary shadow-none" rows="3" required placeholder="Reason for concession..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light border-0 py-3">
+                        <button type="button" class="btn btn-link text-muted text-decoration-none px-4" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary px-4 fw-bold rounded-pill shadow-sm">
+                            <i class="bi bi-send-fill me-2"></i> Submit Request
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+    function openConcessionModal(data) {
+        $('#modal_account_id').val(data.account_id);
+        $('#modal_student_name').text(data.student_name);
+        $('#modal_admission_no').text(data.admission_no + ' | ' + data.class_name);
+        $('#modal_tuition_fee').text('₹' + parseFloat(data.tuition_fee).toLocaleString());
+        $('#modal_current_due').text('₹' + parseFloat(data.current_due).toLocaleString());
+        
+        window.currentTuitionFee = parseFloat(data.tuition_fee);
+        
+        // Clear previous values
+        $('#modal_discount_percent').val('');
+        $('#modal_discount_amount').val('');
+        $('[name="reason"]').val('');
+        
+        new bootstrap.Modal(document.getElementById('concessionModal')).show();
+    }
+
+    $(document).ready(function() {
+        $('#modal_discount_percent').on('input', function() {
+            const percent = parseFloat($(this).val());
+            if (!isNaN(percent) && window.currentTuitionFee > 0) {
+                const amount = (window.currentTuitionFee * percent / 100).toFixed(2);
+                $('#modal_discount_amount').val(amount);
+            } else {
+                $('#modal_discount_amount').val('');
+            }
+        });
+
+        $('#modal_discount_amount').on('input', function() {
+            const amount = parseFloat($(this).val());
+            if (!isNaN(amount) && window.currentTuitionFee > 0) {
+                const percent = (amount / window.currentTuitionFee * 100).toFixed(2);
+                $('#modal_discount_percent').val(percent);
+            } else {
+                $('#modal_discount_percent').val('');
+            }
+        });
+    });
+</script>
 
 {{-- Success Message --}}
 @if(session('success'))
@@ -243,7 +353,7 @@ Swal.fire({
 Swal.fire({
     icon: 'error',
     title: 'Error',
-    text: @json(session('error')),
+    text: {{ json_encode(session('error')) }},
     confirmButtonColor: '#dc3545'
 });
 </script>

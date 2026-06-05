@@ -172,6 +172,17 @@
                                     <a href="{{ route('fees.collect', ['account_id' => $account->account_id]) }}" class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm" title="Collect Fee">
                                         <i class="bi bi-wallet2"></i>
                                     </a>
+                                    <button type="button" class="btn btn-warning btn-sm rounded-pill px-3 ms-1 shadow-sm" title="Request Concession"
+                                            onclick="openConcessionModal({
+                                                account_id: '{{ $account->account_id }}',
+                                                student_name: '{{ addslashes($account->student->student_name) }}',
+                                                admission_no: '{{ $account->student->admission_no }}',
+                                                class_name: '{{ $account->enrollment->classRoom->class_name }}',
+                                                tuition_fee: '{{ $account->final_tuition_fee }}',
+                                                current_due: '{{ $account->remaining_balance }}'
+                                            })">
+                                        <i class="bi bi-percent"></i>
+                                    </button>
                                     <a href="{{ route('fees.ledger', $account->account_id) }}" class="btn btn-white btn-sm border rounded-pill px-3 ms-1 shadow-sm" title="View Ledger">
                                         <i class="bi bi-journal-text"></i>
                                     </a>

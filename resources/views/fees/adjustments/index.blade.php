@@ -93,20 +93,75 @@
         </div>
     @endif
 
+    <!-- Concession Dashboard Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 border-start border-warning border-4">
+                <div class="card-body p-3">
+                    <div class="small text-uppercase fw-bold text-muted mb-1">Pending Requests</div>
+                    <div class="h3 fw-bold mb-0 text-warning">{{ number_format($stats['pending_count']) }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 border-start border-success border-4">
+                <div class="card-body p-3">
+                    <div class="small text-uppercase fw-bold text-muted mb-1">Approved Concessions</div>
+                    <div class="h3 fw-bold mb-0 text-success">{{ number_format($stats['approved_count']) }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 border-start border-danger border-4">
+                <div class="card-body p-3">
+                    <div class="small text-uppercase fw-bold text-muted mb-1">Rejected Requests</div>
+                    <div class="h3 fw-bold mb-0 text-danger">{{ number_format($stats['rejected_count']) }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 border-start border-primary border-4">
+                <div class="card-body p-3">
+                    <div class="small text-uppercase fw-bold text-muted mb-1">Total Concession (₹)</div>
+                    <div class="h3 fw-bold mb-0 text-primary">₹{{ number_format($stats['total_approved_amount'], 2) }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Concession History -->
     <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
-        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 fw-bold text-dark"><i class="bi bi-clock-history me-2 text-primary"></i> Request History & Approval Queue</h6>
-            <form action="{{ route('fees.adjustments.index') }}" method="GET" class="d-flex gap-2">
-                <select name="status" class="form-select form-select-sm rounded-pill px-3 border-primary shadow-none" onchange="this.form.submit()">
-                    <option value="">All Statuses</option>
-                    <option value="PENDING" {{ request('status') === 'PENDING' ? 'selected' : '' }}>PENDING</option>
-                    <option value="APPROVED" {{ request('status') === 'APPROVED' ? 'selected' : '' }}>APPROVED</option>
-                    <option value="REJECTED" {{ request('status') === 'REJECTED' ? 'selected' : '' }}>REJECTED</option>
-                </select>
-                <input type="text" name="q" value="{{ request('q') }}" class="form-control form-control-sm rounded-pill px-3 border-primary shadow-none" placeholder="Search Student/Adm No...">
-                <button type="submit" class="btn btn-primary btn-sm rounded-circle"><i class="bi bi-search"></i></button>
-            </form>
+        <div class="card-header bg-white border-bottom py-3">
+            <div class="row align-items-center g-3">
+                <div class="col-md-4">
+                    <h6 class="m-0 fw-bold text-dark"><i class="bi bi-clock-history me-2 text-primary"></i> Request History & Approval Queue</h6>
+                </div>
+                <div class="col-md-8">
+                    <form action="{{ route('fees.adjustments.index') }}" method="GET" class="row g-2 justify-content-end">
+                        <div class="col-auto">
+                            <select name="status" class="form-select form-select-sm rounded-pill px-3 border-primary shadow-none" onchange="this.form.submit()">
+                                <option value="">All Statuses</option>
+                                <option value="PENDING" {{ request('status') === 'PENDING' ? 'selected' : '' }}>PENDING</option>
+                                <option value="APPROVED" {{ request('status') === 'APPROVED' ? 'selected' : '' }}>APPROVED</option>
+                                <option value="REJECTED" {{ request('status') === 'REJECTED' ? 'selected' : '' }}>REJECTED</option>
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <select name="date_range" class="form-select form-select-sm rounded-pill px-3 border-primary shadow-none" onchange="this.form.submit()">
+                                <option value="">All Time</option>
+                                <option value="today" {{ request('date_range') === 'today' ? 'selected' : '' }}>Today</option>
+                                <option value="month" {{ request('date_range') === 'month' ? 'selected' : '' }}>This Month</option>
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <div class="input-group input-group-sm">
+                                <input type="text" name="q" value="{{ request('q') }}" class="form-control rounded-pill-start px-3 border-primary shadow-none" placeholder="Search Student/Adm No...">
+                                <button type="submit" class="btn btn-primary rounded-pill-end"><i class="bi bi-search"></i></button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">

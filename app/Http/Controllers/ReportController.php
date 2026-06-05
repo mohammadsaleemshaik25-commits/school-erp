@@ -233,4 +233,57 @@ class ReportController extends Controller
 
         return view('fees.reports.clerk', compact('clerkStats', 'startDate', 'endDate'));
     }
+
+    /**
+     * Concession Summary Report
+     */
+    public function concessionReport(Request $request): View
+    {
+        $classes = ClassRoom::all();
+        $academicYears = AcademicYear::all();
+        
+        $activeYear = AcademicYear::where('is_active', true)->first();
+        $selectedYearId = $request->get('academic_year_id', $activeYear ? $activeYear->academic_year_id : null);
+        $selectedClassId = $request->get('class_id');
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+        $status = $request->get('status');
+
+        $query = \App\Models\StudentFeeAdjustment::with(['feeAccount.enrollment.student', 'feeAccount.enrollment.classRoom', 'requester', 'approver'])
+            ->whereHas('feeAccount.enrollment', function($q) use ($selectedYearId, $selectedClassId) {
+                if ($selectedYearId) $q->where('academic_year_id', $selectedYearId);
+                if ($selectedClassId) $q->where('class_id', $selectedClassId);
+            });
+
+        if ($startDate) $query->whereDate('created_at', '>=', $startDate);
+        if ($endDate) $query->whereDate('created_at', '<=', $endDate);
+        if ($status) $query->where('approval_status', $status);
+
+        if ($request->filled('student_name')) {
+            $query->whereHas('feeAccount.enrollment.student', function($q) use ($request) {
+                $q->where('student_name', 'like', '%' . $request->student_name . '%');
+            });
+        }
+
+        $adjustments = $query->orderBy('created_at', 'desc')->get();
+
+        $summary = [
+            'total_requested' => $adjustments->count(),
+            'total_approved' => $adjustments->where('approval_status', 'APPROVED')->count(),
+            'total_rejected' => $adjustments->where('approval_status', 'REJECTED')->count(),
+            'total_amount' => $adjustments->where('approval_status', 'APPROVED')->sum('discount_amount'),
+        ];
+
+        return view('fees.reports.concessions', compact(
+            'adjustments', 
+            'classes', 
+            'academicYears', 
+            'selectedYearId', 
+            'selectedClassId', 
+            'summary',
+            'startDate',
+            'endDate',
+            'status'
+        ));
+    }
 }

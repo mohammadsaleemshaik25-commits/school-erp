@@ -217,10 +217,37 @@ class FinanceService
      */
     public function requestAdjustment(array $data, int $requesterId): StudentFeeAdjustment
     {
+        $accountId = $data['account_id'];
+        $discountAmount = (float) $data['discount_amount'];
+
+        if ($discountAmount <= 0) {
+            throw new InvalidArgumentException("Concession amount must be greater than zero.");
+        }
+
+        $feeAccount = StudentFeeAccount::where('account_id', $accountId)->firstOrFail();
+
+        if ($discountAmount > (float) $feeAccount->final_tuition_fee) {
+            throw new InvalidArgumentException("Concession cannot exceed the total tuition fee (₹" . number_format($feeAccount->final_tuition_fee, 2) . ").");
+        }
+
+        if ($discountAmount > (float) $feeAccount->remaining_balance) {
+            throw new InvalidArgumentException("Concession cannot exceed the current outstanding balance (₹" . number_format($feeAccount->remaining_balance, 2) . ").");
+        }
+
+        // Check for duplicate pending requests
+        $duplicate = StudentFeeAdjustment::where('account_id', $accountId)
+            ->where('approval_status', 'PENDING')
+            ->where('discount_amount', $discountAmount)
+            ->exists();
+
+        if ($duplicate) {
+            throw new InvalidArgumentException("A pending concession request for this amount already exists for this student.");
+        }
+
         $adjustment = StudentFeeAdjustment::create([
-            'account_id' => $data['account_id'],
+            'account_id' => $accountId,
             'adjustment_type' => $data['adjustment_type'],
-            'discount_amount' => $data['discount_amount'],
+            'discount_amount' => $discountAmount,
             'discount_percent' => $data['discount_percent'] ?? 0,
             'reason' => $data['reason'],
             'requested_by' => $requesterId,

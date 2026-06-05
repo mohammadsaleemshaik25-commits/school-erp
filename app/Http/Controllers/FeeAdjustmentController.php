@@ -26,10 +26,12 @@ class FeeAdjustmentController extends Controller
         $query = StudentFeeAdjustment::with(['feeAccount.enrollment.student', 'feeAccount.enrollment.classRoom', 'requester', 'approver'])
             ->orderBy('created_at', 'desc');
 
+        // Status Filter
         if ($request->filled('status')) {
             $query->where('approval_status', $request->status);
         }
 
+        // Search Filter
         if ($request->filled('q')) {
             $q = $request->q;
             $query->whereHas('feeAccount.enrollment.student', function ($sub) use ($q) {
@@ -38,9 +40,27 @@ class FeeAdjustmentController extends Controller
             });
         }
 
+        // Date Filters
+        if ($request->filled('date_range')) {
+            if ($request->date_range === 'today') {
+                $query->whereDate('created_at', \Carbon\Carbon::today());
+            } elseif ($request->date_range === 'month') {
+                $query->whereMonth('created_at', \Carbon\Carbon::now()->month)
+                      ->whereYear('created_at', \Carbon\Carbon::now()->year);
+            }
+        }
+
+        // Dashboard Card Stats
+        $stats = [
+            'pending_count' => StudentFeeAdjustment::where('approval_status', 'PENDING')->count(),
+            'approved_count' => StudentFeeAdjustment::where('approval_status', 'APPROVED')->count(),
+            'rejected_count' => StudentFeeAdjustment::where('approval_status', 'REJECTED')->count(),
+            'total_approved_amount' => StudentFeeAdjustment::where('approval_status', 'APPROVED')->sum('discount_amount'),
+        ];
+
         $adjustments = $query->paginate(15)->withQueryString();
 
-        return view('fees.adjustments.index', compact('adjustments'));
+        return view('fees.adjustments.index', compact('adjustments', 'stats'));
     }
 
     /**
@@ -50,8 +70,8 @@ class FeeAdjustmentController extends Controller
     {
         $q = $request->get('q');
         
-        $accounts = \App\Models\StudentFeeAccount::with(['enrollment.student', 'enrollment.classRoom'])
-            ->where('status', 'ACTIVE')
+        $accounts = \App\Models\StudentFeeAccount::with(['enrollment.student', 'enrollment.classRoom', 'enrollment.section'])
+            ->where('status', '!=', 'PAID') // Only search for students with due
             ->whereHas('enrollment.student', function($query) use ($q) {
                 $query->where('student_name', 'like', "%{$q}%")
                       ->orWhere('admission_no', 'like', "%{$q}%");
@@ -62,7 +82,10 @@ class FeeAdjustmentController extends Controller
                 return [
                     'id' => $account->account_id,
                     'text' => $account->enrollment->student->student_name . " (" . $account->enrollment->student->admission_no . ")",
+                    'student_name' => $account->enrollment->student->student_name,
+                    'admission_no' => $account->enrollment->student->admission_no,
                     'class' => $account->enrollment->classRoom->class_name,
+                    'section' => $account->enrollment->section->section_name ?? '-',
                     'due' => $account->remaining_balance,
                     'tuition' => $account->final_tuition_fee,
                     'books' => $account->books_fee_applied,
