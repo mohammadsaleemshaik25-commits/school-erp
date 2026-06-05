@@ -103,4 +103,26 @@ class ReceiptController extends Controller
                 ->withErrors(['error' => $e->getMessage()]);
         }
     }
+
+    /**
+     * Cancel a receipt
+     */
+    public function cancel(Request $request, Receipt $receipt)
+    {
+        $request->validate([
+            'cancellation_reason' => 'required|string|max:255',
+        ]);
+
+        // Business Rule: Cancellation allowed ONLY on the same day
+        if (!$receipt->generated_datetime->isToday()) {
+            return back()->with('error', 'Receipt cancellation is only allowed on the same day it was generated. Please contact Administrator for manual adjustments.');
+        }
+
+        try {
+            $this->financeService->cancelReceipt($receipt->receipt_id, $request->cancellation_reason, auth()->id());
+            return back()->with('success', 'Receipt cancelled successfully.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
 }

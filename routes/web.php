@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\AdmissionController;
+use App\Http\Controllers\PromotionController;
+use App\Http\Controllers\BooksDecisionController;
 use App\Http\Controllers\AcademicYearController;
 use App\Http\Controllers\AdmissionRegisterController;
 use App\Http\Controllers\Api\StudentApiController;
@@ -9,7 +12,6 @@ use App\Http\Controllers\ClassController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FeeAdjustmentController;
 use App\Http\Controllers\PaymentController;
-use App\Http\Controllers\PromotionController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SectionController;
@@ -49,6 +51,19 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/receipts/{receipt}/reprint', [ReceiptController::class, 'reprint'])->name('fees.receipts.reprint');
         Route::post('/payments/{payment}/cancel', [PaymentController::class, 'cancel'])->name('fees.payments.cancel');
 
+        Route::get('/books-decisions', [BooksDecisionController::class, 'index'])->name('books.index');
+        Route::get('/books-decisions/{account}/edit', [BooksDecisionController::class, 'edit'])->name('books.edit');
+        Route::put('/books-decisions/{account}', [BooksDecisionController::class, 'update'])->name('books.update');
+        Route::get('/books-reports', [BooksDecisionController::class, 'report'])->name('books.report');
+
+        // Promotion Routes
+        Route::middleware('role:Admin,Administrator,Principal,Correspondent')->group(function () {
+            Route::get('/promotions', [PromotionController::class, 'index'])->name('promotions.index');
+            Route::get('/promotions/process', [PromotionController::class, 'listStudents'])->name('promotions.process');
+            Route::post('/promotions', [PromotionController::class, 'store'])->name('promotions.store')->middleware('role:Admin,Administrator');
+            Route::get('/promotions/report', [PromotionController::class, 'report'])->name('promotions.report');
+        });
+
         Route::get('/fees/adjustments', [FeeAdjustmentController::class, 'index'])->name('fees.adjustments.index');
         Route::post('/fees/adjustments', [FeeAdjustmentController::class, 'store']);
         Route::patch('/fees/books-fee/{accountId}', [BooksFeeController::class, 'update'])->name('fees.books.update');
@@ -80,6 +95,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     // role: Principal, Correspondent, Admin
     // ==========================================
     Route::middleware('role:Principal,Correspondent,Admin,Administrator')->group(function () {
+        Route::resource('admissions', AdmissionController::class);
+        Route::delete('/admissions/documents/{documentId}', [AdmissionController::class, 'deleteDocument'])->name('admissions.documents.destroy');
         Route::get('/admissions/register', [AdmissionRegisterController::class, 'index']);
 
         Route::get('/students/create', [StudentController::class, 'create']);
@@ -99,8 +116,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/daily-collection', [ReportController::class, 'dailyCollection'])->name('reports.daily');
         Route::get('/fees/reports/outstanding', [ReportController::class, 'outstandingFees'])->name('fees.reports.outstanding');
 
-        Route::get('/promotions', [PromotionController::class, 'index']);
-        Route::post('/promotions', [PromotionController::class, 'store']);
+        Route::get('/promotions', [PromotionController::class, 'index'])->name('promotions.index');
+        Route::post('/promotions', [PromotionController::class, 'store'])->name('promotions.store');
 
         Route::get('/students-export/excel', [StudentExportController::class, 'studentsExcel']);
         Route::get('/students-export/pdf', [StudentExportController::class, 'studentsPdf']);
@@ -114,7 +131,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     // 3. CORRESPONDENT GROUP (Executive Access)
     // role: Correspondent, Admin
     // ==========================================
-    Route::middleware('role:Correspondent,Admin,Administrator')->group(function () {
+    Route::middleware('role:Correspondent,Principal,Admin,Administrator')->group(function () {
         Route::get('/fee-report', [ReportController::class, 'feeReport'])->name('reports.fee');
         Route::get('/fees/reports/clerk', [ReportController::class, 'clerkCollectionReport'])->name('fees.reports.clerk');
         Route::get('/api/dashboard/stats', [DashboardController::class, 'stats']);

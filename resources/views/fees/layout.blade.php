@@ -160,6 +160,25 @@ function openCancelModal(cancelUrl, receiptNumber) {
                     <span class="fw-semibold">Receipts</span>
                 </a>
 
+                <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('books.*') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('books.index') }}">
+                    <i class="bi bi-book me-3 fs-5"></i>
+                    <span class="fw-semibold">Books Decision</span>
+                </a>
+
+                @if(in_array($role, ['ADMINISTRATOR', 'ADMIN', 'PRINCIPAL', 'CORRESPONDENT']))
+                <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('admissions.*') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('admissions.index') }}">
+                    <i class="bi bi-person-plus me-3 fs-5"></i>
+                    <span class="fw-semibold">Admissions</span>
+                </a>
+
+                @if(in_array($role, ['ADMINISTRATOR', 'ADMIN', 'PRINCIPAL', 'CORRESPONDENT']))
+                <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('promotions.*') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('promotions.index') }}">
+                    <i class="bi bi-arrow-up-right-circle me-3 fs-5"></i>
+                    <span class="fw-semibold">Promotions</span>
+                </a>
+                @endif
+                @endif
+
                 <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('fees.reports.closing') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('fees.reports.closing') }}">
                     <i class="bi bi-file-earmark-check me-3 fs-5"></i>
                     <span class="fw-semibold">Closing Report</span>

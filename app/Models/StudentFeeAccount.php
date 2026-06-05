@@ -19,6 +19,8 @@ class StudentFeeAccount extends Model
         'final_tuition_fee',
         'books_status',
         'books_from_school',
+        'books_decision_by',
+        'books_decision_date',
         'books_fee_applied',
         'books_fee',
         'net_fee',
@@ -41,9 +43,16 @@ class StudentFeeAccount extends Model
         'waived_amount' => 'decimal:2',
         'total_due' => 'decimal:2',
         'waived_date' => 'date',
+        'books_decision_date' => 'datetime',
         'closed_at' => 'datetime',
         'books_from_school' => 'boolean',
     ];
+
+    // Books Status Constants
+    public const BOOKS_PENDING = 'PENDING';
+    public const BOOKS_SCHOOL = 'SCHOOL';
+    public const BOOKS_OUTSIDE = 'OUTSIDE';
+    public const BOOKS_PAID = 'BOOKS_PAID';
 
     public function enrollment(): BelongsTo
     {
@@ -129,65 +138,76 @@ class StudentFeeAccount extends Model
         );
     }
 
+    public function decisionMaker(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'books_decision_by', 'user_id');
+    }
+
     // ==========================
     // Books Status Helpers
     // ==========================
 
     public function booksPurchasedFromSchool(): bool
     {
-        return $this->books_status === 'SCHOOL';
+        return $this->books_status === self::BOOKS_SCHOOL;
     }
 
     public function booksPurchasedOutside(): bool
     {
-        return $this->books_status === 'OUTSIDE';
+        return $this->books_status === self::BOOKS_OUTSIDE;
     }
 
     public function booksPendingDecision(): bool
     {
-        return $this->books_status === 'PENDING';
+        return $this->books_status === self::BOOKS_PENDING;
     }
 
     public function booksPaid(): bool
     {
-        return $this->books_status === 'BOOKS_PAID';
+        return $this->books_status === self::BOOKS_PAID;
+    }
+
+    public function hasBooksPayments(): bool
+    {
+        return $this->payments()
+            ->where('status', 'SUCCESS')
+            ->where('books_fee_paid', '>', 0)
+            ->exists();
     }
 
     // ==========================
     // Financial Calculations
     // ==========================
 
-   public function recalculateTotals(): void
-{
-    // Total due is (Tuition Fee + Books Fee (if School/Pending)) - Discounts/Waivers
-    // Wait, the schema has net_fee, final_tuition_fee, books_fee, books_fee_applied.
-    
-    // We'll use final_tuition_fee + books_fee_applied as the base.
-    $tuition = (float) $this->final_tuition_fee;
-    $books = (float) $this->books_fee_applied;
-    $prevBalance = (float) $this->previous_balance;
-    
-    $totalBilled = $tuition + $books + $prevBalance;
-    
-    $discounts = (float) $this->discount_amount + (float) $this->waived_amount;
-    
-    $this->total_due = max(0, $totalBilled - $discounts);
+    public function recalculateTotals(): void
+    {
+        // Total due is (Tuition Fee + Books Fee Applied + Previous Balance) - Discounts/Waivers
+        $tuition = (float) $this->final_tuition_fee;
+        $books = (float) $this->books_fee_applied;
+        $prevBalance = (float) $this->previous_balance;
 
-    $paid = (float) $this->total_paid;
+        $totalBilled = $tuition + $books + $prevBalance;
 
-    if ($paid >= $this->total_due) {
-        $this->status = 'PAID';
-        if (!$this->closed_at) {
-            $this->closed_at = now();
+        $discounts = (float) $this->discount_amount + (float) $this->waived_amount;
+
+        $this->total_due = max(0, $totalBilled - $discounts);
+        $this->net_fee = $tuition + $books; // Update net_fee as sum of tuition and applied books fee
+
+        $paid = (float) $this->total_paid;
+
+        if ($paid >= $this->total_due && $this->total_due > 0) {
+            $this->status = 'PAID';
+            if (!$this->closed_at) {
+                $this->closed_at = now();
+            }
+        } elseif ($paid > 0) {
+            $this->status = 'PARTIALLY_PAID';
+            $this->closed_at = null;
+        } else {
+            $this->status = 'UNPAID';
+            $this->closed_at = null;
         }
-    } elseif ($paid > 0) {
-        $this->status = 'PARTIALLY_PAID';
-        $this->closed_at = null;
-    } else {
-        $this->status = 'UNPAID';
-        $this->closed_at = null;
     }
-}
 
     public function getTotalPaidAttribute(): float
     {
@@ -202,5 +222,27 @@ class StudentFeeAccount extends Model
             0.00,
             (float) ($this->total_due - $this->total_paid)
         );
+    }
+
+    public function getRemainingBooksBalanceAttribute(): float
+    {
+        $booksPaid = (float) $this->payments()
+            ->where('status', 'SUCCESS')
+            ->sum('books_fee_paid');
+
+        return max(0.00, (float) $this->books_fee_applied - $booksPaid);
+    }
+
+    public function getRemainingTuitionBalanceAttribute(): float
+    {
+        $tuitionPaid = (float) $this->payments()
+            ->where('status', 'SUCCESS')
+            ->sum('tuition_fee_paid');
+
+        // Note: total_due already subtracts discounts/waivers from (tuition + books + prev)
+        // For simplicity in reporting, we treat tuition due as final_tuition_fee + previous_balance - discounts
+        $tuitionDue = (float) $this->final_tuition_fee + (float) $this->previous_balance - (float) $this->discount_amount - (float) $this->waived_amount;
+        
+        return max(0.00, $tuitionDue - $tuitionPaid);
     }
 }

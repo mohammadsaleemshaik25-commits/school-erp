@@ -3,16 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateBooksFeeRequest;
-use App\Services\FinanceService;
+use App\Services\BooksDecisionService;
 use Exception;
 
 class BooksFeeController extends Controller
 {
-    protected FinanceService $financeService;
+    protected BooksDecisionService $booksService;
 
-    public function __construct(FinanceService $financeService)
+    public function __construct(BooksDecisionService $booksService)
     {
-        $this->financeService = $financeService;
+        $this->booksService = $booksService;
     }
 
     /**
@@ -21,10 +21,11 @@ class BooksFeeController extends Controller
     public function update(UpdateBooksFeeRequest $request, int $accountId)
     {
         try {
-            $this->financeService->updateBooksDecision(
+            $this->booksService->updateDecision(
                 $accountId,
                 $request->validated()['books_status'],
-                auth()->id()
+                auth()->id(),
+                $request->ip()
             );
 
             return redirect()

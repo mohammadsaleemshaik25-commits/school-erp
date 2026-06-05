@@ -143,7 +143,7 @@ class ReportController extends Controller
         $selectedYearId = $request->get('academic_year_id', $activeYear ? $activeYear->academic_year_id : null);
         $selectedClassId = $request->get('class_id');
 
-        $query = StudentFeeAccount::with(['student', 'academicYear'])
+        $query = StudentFeeAccount::with(['student', 'academicYear', 'enrollment.classRoom', 'enrollment.section'])
             ->whereHas('enrollment', function($q) use ($selectedYearId, $selectedClassId) {
                 $q->where('academic_year_id', $selectedYearId);
                 if ($selectedClassId) {
@@ -151,16 +151,68 @@ class ReportController extends Controller
                 }
             });
 
-        // Fetch and filter accounts locally to accurately handle computed outstanding balances
-        $accounts = $query->get()->filter(function ($account) {
-            return $account->remaining_balance > 0;
+        // Search functionality
+        if ($request->filled('student_name')) {
+            $query->whereHas('student', function($q) use ($request) {
+                $q->where('student_name', 'like', '%' . $request->student_name . '%');
+            });
+        }
+
+        if ($request->filled('admission_no')) {
+            $query->whereHas('student', function($q) use ($request) {
+                $q->where('admission_no', 'like', '%' . $request->admission_no . '%');
+            });
+        }
+
+        if ($request->filled('father_name')) {
+            $query->whereHas('student', function($q) use ($request) {
+                $q->where('father_name', 'like', '%' . $request->father_name . '%');
+            });
+        }
+
+        if ($request->filled('aadhaar_no')) {
+            $query->whereHas('student', function($q) use ($request) {
+                $q->where('aadhaar_no', 'like', '%' . $request->aadhaar_no . '%');
+            });
+        }
+
+        if ($request->filled('phone_primary')) {
+            $query->whereHas('student', function($q) use ($request) {
+                $q->where('phone_primary', 'like', '%' . $request->phone_primary . '%');
+            });
+        }
+
+        // Fetch all matching accounts to calculate summary stats
+        $allMatchingAccounts = $query->get()->filter(function ($account) {
+            return (float)$account->remaining_balance > 0;
         });
 
-        $totalOutstanding = $accounts->sum(function ($account) {
-            return $account->remaining_balance;
-        });
+        $summary = [
+            'total_students_with_due' => $allMatchingAccounts->count(),
+            'total_outstanding' => $allMatchingAccounts->sum('remaining_balance'),
+            'total_books_due' => $allMatchingAccounts->sum('remaining_books_balance'),
+            'total_tuition_due' => $allMatchingAccounts->sum('remaining_tuition_balance'),
+        ];
 
-        return view('fees.reports.outstanding', compact('accounts', 'classes', 'academicYears', 'selectedYearId', 'selectedClassId', 'totalOutstanding'));
+        // Manual pagination for the filtered collection
+        $perPage = 15;
+        $page = $request->get('page', 1);
+        $accounts = new \Illuminate\Pagination\LengthAwarePaginator(
+            $allMatchingAccounts->forPage($page, $perPage),
+            $allMatchingAccounts->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
+
+        return view('fees.reports.outstanding', compact(
+            'accounts', 
+            'classes', 
+            'academicYears', 
+            'selectedYearId', 
+            'selectedClassId', 
+            'summary'
+        ));
     }
 
     /**

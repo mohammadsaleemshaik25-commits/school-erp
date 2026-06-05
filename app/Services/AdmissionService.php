@@ -1,0 +1,322 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Admission;
+use App\Models\Student;
+use App\Models\StudentEnrollment;
+use App\Models\StudentFeeAccount;
+use App\Models\FeeStructure;
+use App\Models\AuditLog;
+use App\Models\StudentDocument;
+use App\Models\Payment;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Exception;
+
+class AdmissionService
+{
+    /**
+     * Create a new admission with all related records.
+     */
+    public function createAdmission(array $data, int $userId): Admission
+    {
+        return DB::transaction(function () use ($data, $userId) {
+            // 1. Generate Admission Number
+            $admissionNo = $this->generateAdmissionNumber();
+
+            // 2. Find Fee Structure
+            $feeStructure = FeeStructure::where('academic_year_id', $data['academic_year_id'])
+                ->where('class_id', $data['class_id'])
+                ->first();
+
+            if (!$feeStructure) {
+                throw new Exception("Fee structure not defined for the selected academic year and class.");
+            }
+
+            // 3. Handle Photo Upload (Optional)
+            $photoPath = null;
+            if (isset($data['photo']) && $data['photo']->isValid()) {
+                $photoPath = $data['photo']->store('students/photos', 'public');
+            }
+
+            // 4. Create Student Record
+            $student = Student::create([
+                'admission_no' => $admissionNo,
+                'student_name' => $data['student_name'],
+                'dob' => $data['dob'],
+                'gender' => $data['gender'],
+                'father_name' => $data['father_name'],
+                'mother_name' => $data['mother_name'],
+                'guardian_name' => $data['guardian_name'] ?? null,
+                'pen_no' => $data['pen_no'],
+                'aadhaar_no' => $data['aadhaar_no'],
+                'phone_primary' => $data['phone_primary'],
+                'phone_secondary' => $data['phone_secondary'] ?? null,
+                'email' => $data['email'] ?? null,
+                'address' => $data['address'],
+                'admission_date' => $data['admission_date'],
+                'photo_path' => $photoPath,
+                'status' => 'ACTIVE',
+            ]);
+
+            // 5. Create Enrollment
+            $enrollment = StudentEnrollment::create([
+                'student_id' => $student->student_id,
+                'academic_year_id' => $data['academic_year_id'],
+                'class_id' => $data['class_id'],
+                'section_id' => $data['section_id'],
+                'promotion_status' => 'NEW',
+                'status' => 'ACTIVE',
+            ]);
+
+            // 6. Create Student Fee Account
+            $feeAccount = StudentFeeAccount::create([
+                'enrollment_id' => $enrollment->enrollment_id,
+                'fee_structure_id' => $feeStructure->fee_structure_id,
+                'discount_amount' => 0,
+                'final_tuition_fee' => $feeStructure->tuition_fee,
+                'books_from_school' => 1,
+                'books_fee_applied' => 0,
+                'books_fee' => $feeStructure->books_fee,
+                'net_fee' => $feeStructure->tuition_fee,
+                'previous_balance' => 0,
+                'waived_amount' => 0,
+                'total_due' => $feeStructure->tuition_fee,
+                'status' => 'ACTIVE',
+            ]);
+
+            // 7. Create Admission Record
+            $admission = Admission::create([
+                'student_id' => $student->student_id,
+                'academic_year_id' => $data['academic_year_id'],
+                'class_id' => $data['class_id'],
+                'section_id' => $data['section_id'],
+                'admission_status' => 'APPROVED',
+                'remarks' => $data['remarks'] ?? null,
+                'approved_by' => $userId,
+                'approved_at' => now(),
+                'created_by' => $userId,
+            ]);
+
+            // 8. Handle Document Uploads (Optional)
+            if (isset($data['documents']) && is_array($data['documents'])) {
+                foreach ($data['documents'] as $docType => $file) {
+                    if ($file && $file->isValid()) {
+                        $filePath = $file->store('students/documents', 'public');
+                        StudentDocument::create([
+                            'student_id' => $student->student_id,
+                            'document_type' => $docType,
+                            'file_name' => $file->getClientOriginalName(),
+                            'file_path' => $filePath,
+                            'uploaded_at' => now(),
+                        ]);
+                    }
+                }
+            }
+
+            // 9. Create Audit Log
+            $this->logAction(
+                $userId,
+                'ADMISSION_CREATED',
+                'admissions',
+                $admission->admission_id,
+                null,
+                "Created admission for student: {$student->student_name} (ID: {$student->student_id})"
+            );
+
+            return $admission;
+        });
+    }
+
+    /**
+     * Update an admission (only specific fields allowed).
+     */
+    public function updateAdmission(Admission $admission, array $data, int $userId): void
+    {
+        DB::transaction(function () use ($admission, $data, $userId) {
+            $student = $admission->student;
+            $oldValues = $student->only(['student_name', 'dob', 'father_name', 'mother_name', 'guardian_name', 'phone_primary', 'phone_secondary', 'email', 'address']);
+
+            // Update allowed student fields
+            $student->update([
+                'student_name' => $data['student_name'],
+                'dob' => $data['dob'],
+                'father_name' => $data['father_name'],
+                'mother_name' => $data['mother_name'],
+                'guardian_name' => $data['guardian_name'] ?? null,
+                'phone_primary' => $data['phone_primary'],
+                'phone_secondary' => $data['phone_secondary'] ?? null,
+                'email' => $data['email'] ?? null,
+                'address' => $data['address'],
+            ]);
+
+            // Handle Photo Replacement
+            if (isset($data['photo']) && $data['photo']->isValid()) {
+                $oldPhotoPath = $student->photo_path;
+                $newPhotoPath = $data['photo']->store('students/photos', 'public');
+                
+                $student->update(['photo_path' => $newPhotoPath]);
+
+                if ($oldPhotoPath) {
+                    Storage::disk('public')->delete($oldPhotoPath);
+                }
+
+                $this->logAction($userId, 'PHOTO_UPDATED', 'students', $student->student_id, $oldPhotoPath, $newPhotoPath);
+            }
+
+            // Handle Document Management
+            if (isset($data['documents']) && is_array($data['documents'])) {
+                foreach ($data['documents'] as $docType => $file) {
+                    if ($file && $file->isValid()) {
+                        $existingDoc = StudentDocument::where('student_id', $student->student_id)
+                            ->where('document_type', $docType)
+                            ->first();
+
+                        $newPath = $file->store('students/documents', 'public');
+                        $fileName = $file->getClientOriginalName();
+
+                        if ($existingDoc) {
+                            $oldPath = $existingDoc->file_path;
+                            $existingDoc->update([
+                                'file_name' => $fileName,
+                                'file_path' => $newPath,
+                                'uploaded_at' => now(),
+                            ]);
+                            Storage::disk('public')->delete($oldPath);
+                            $this->logAction($userId, 'DOCUMENT_UPDATED', 'student_documents', $existingDoc->document_id, $oldPath, $newPath);
+                        } else {
+                            $newDoc = StudentDocument::create([
+                                'student_id' => $student->student_id,
+                                'document_type' => $docType,
+                                'file_name' => $fileName,
+                                'file_path' => $newPath,
+                                'uploaded_at' => now(),
+                            ]);
+                            $this->logAction($userId, 'DOCUMENT_UPLOADED', 'student_documents', $newDoc->document_id, null, $newPath);
+                        }
+                    }
+                }
+            }
+
+            // Update admission remarks if provided
+            if (isset($data['remarks'])) {
+                $admission->update(['remarks' => $data['remarks']]);
+            }
+
+            // Create Audit Log for General Update
+            $this->logAction(
+                $userId,
+                'ADMISSION_UPDATED',
+                'admissions',
+                $admission->admission_id,
+                json_encode($oldValues),
+                json_encode($student->only(array_keys($oldValues)))
+            );
+        });
+    }
+
+    /**
+     * Delete a specific student document
+     */
+    public function deleteDocument(int $documentId, int $userId): void
+    {
+        DB::transaction(function () use ($documentId, $userId) {
+            $doc = StudentDocument::findOrFail($documentId);
+            $filePath = $doc->file_path;
+            
+            Storage::disk('public')->delete($filePath);
+            $doc->delete();
+
+            $this->logAction($userId, 'DOCUMENT_DELETED', 'student_documents', $documentId, $filePath, null);
+        });
+    }
+
+    /**
+     * Delete an admission and all related student data (Admin only)
+     */
+    public function deleteAdmission(int $admissionId, int $userId): void
+    {
+        DB::transaction(function () use ($admissionId, $userId) {
+            $admission = Admission::with(['student.enrollments.feeAccount', 'student.documents'])->findOrFail($admissionId);
+            $student = $admission->student;
+
+            // 1. Check for payments - prevent delete if financial history exists
+            $hasPayments = Payment::whereHas('feeAccount.enrollment', function($q) use ($student) {
+                $q->where('student_id', $student->student_id);
+            })->where('status', 'SUCCESS')->exists();
+
+            if ($hasPayments) {
+                throw new Exception("Cannot delete student record because successful fee payments exist in the ledger. Cancel payments first or mark student as TRANSFERRED.");
+            }
+
+            // 2. Delete Documents & Files
+            foreach ($student->documents as $doc) {
+                Storage::disk('public')->delete($doc->file_path);
+                $doc->delete();
+            }
+
+            // 3. Delete Photo
+            if ($student->photo_path) {
+                Storage::disk('public')->delete($student->photo_path);
+            }
+
+            // 4. Delete Fee Accounts & Enrollments
+            foreach ($student->enrollments as $enrollment) {
+                if ($enrollment->feeAccount) {
+                    $enrollment->feeAccount->delete();
+                }
+                $enrollment->delete();
+            }
+
+            // 5. Create Audit Log
+            $this->logAction(
+                $userId,
+                'ADMISSION_DELETED',
+                'students',
+                $student->student_id,
+                json_encode($student->toArray()),
+                "Deleted student record: {$student->student_name} (Adm: {$student->admission_no})"
+            );
+
+            // 6. Delete Admission & Student
+            $admission->delete();
+            $student->delete();
+        });
+    }
+
+    /**
+     * Generate unique Admission Number (ADM001, ADM002, ...).
+     */
+    protected function generateAdmissionNumber(): string
+    {
+        $lastStudent = Student::where('admission_no', 'LIKE', 'ADM%')
+            ->orderBy('admission_no', 'desc')
+            ->first();
+
+        if (!$lastStudent) {
+            return 'ADM001';
+        }
+
+        $lastNumber = (int) substr($lastStudent->admission_no, 3);
+        $newNumber = $lastNumber + 1;
+
+        return 'ADM' . str_pad($newNumber, 3, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Log action to audit_logs.
+     */
+    protected function logAction(int $userId, string $action, string $tableName, $recordId, $oldValue, $newValue): void
+    {
+        AuditLog::create([
+            'user_id' => $userId,
+            'action' => $action,
+            'table_name' => $tableName,
+            'record_id' => $recordId,
+            'old_value' => $oldValue,
+            'new_value' => $newValue,
+            'ip_address' => request()->ip(),
+        ]);
+    }
+}

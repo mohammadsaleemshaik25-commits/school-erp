@@ -29,6 +29,13 @@ class Student extends Model
         'photo_path',
     ];
 
+    protected $casts = [
+    'dob' => 'date',
+    'admission_date' => 'date',
+    'created_at' => 'datetime',
+    'updated_at' => 'datetime',
+    ];
+
     public function documents()
     {
         return $this->hasMany(StudentDocument::class, 'student_id', 'student_id');
@@ -66,5 +73,34 @@ class Student extends Model
             ->whereRaw('UPPER(document_type) = ?', ['PHOTO'])
             ->orderByDesc('uploaded_at')
             ->first();
+    }
+
+    // ==========================
+    // Sensitive Data Masking
+    // ==========================
+
+    public function getMaskedAadhaarAttribute(): string
+    {
+        if (empty($this->aadhaar_no)) return '';
+        $val = str_replace([' ', '-'], '', $this->aadhaar_no);
+        if (strlen($val) <= 4) return $val;
+        return str_repeat('*', strlen($val) - 4) . substr($val, -4);
+    }
+
+    public function getMaskedPenAttribute(): string
+    {
+        if (empty($this->pen_no)) return '';
+        $val = $this->pen_no;
+        if (strlen($val) <= 4) return $val;
+        return str_repeat('*', strlen($val) - 4) . substr($val, -4);
+    }
+
+    /**
+     * Check if current user can view full sensitive data
+     */
+    public function canViewSensitiveData(): bool
+    {
+        $role = strtoupper(optional(auth()->user()?->role)->role_name ?? '');
+        return in_array($role, ['ADMIN', 'ADMINISTRATOR', 'PRINCIPAL', 'CORRESPONDENT']);
     }
 }

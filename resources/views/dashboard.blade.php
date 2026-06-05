@@ -28,7 +28,7 @@
             <div class="col-md-3">
                 <div class="card border-0 shadow-sm bg-primary text-white h-100 overflow-hidden position-relative">
                     <div class="card-body p-3">
-                        <div class="small text-uppercase fw-bold opacity-75 mb-2" style="font-size: 0.7rem; letter-spacing: 0.5px;">Today's Collection</div>
+                        <div class="small text-uppercase fw-bold opacity-75 mb-2" style="font-size: 0.7rem; letter-spacing: 0.5px;">Total Revenue</div>
                         <div class="h4 fw-bold mb-0">₹{{ number_format($todayCollection, 2) }}</div>
                         <i class="bi bi-currency-rupee position-absolute end-0 bottom-0 opacity-25" style="font-size: 4rem; margin-right: -10px; margin-bottom: -15px;"></i>
                     </div>
@@ -122,7 +122,7 @@
             <div class="col-md-3">
                 <div class="card border-0 shadow-sm bg-white p-4 h-100 border-start border-success border-4">
                     <p class="text-sm text-muted text-uppercase fw-bold small mb-2">Today's Collection</p>
-                    <p class="h2 font-semibold text-indigo-900 mb-0">₹{{ number_format((float) $todayCollection, 2) }}</p>
+                    <p class="h2 font-semibold text-indigo-900 mb-0">{{ number_format((float) $totalRevenue, 2) }}</p>
                 </div>
             </div>
             <div class="col-md-3">

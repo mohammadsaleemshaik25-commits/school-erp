@@ -35,29 +35,18 @@
                 </div>
             </div>
 
-            <div class="row mb-3">
-                <div class="col-sm-3">
-                    @if($receipt->payment?->feeAccount?->student?->photo_path)
-                        <img src="{{ asset('storage/'.$receipt->payment->feeAccount->student->photo_path) }}"
-                             alt="Student Photo"
-                             width="60"
-                             style="border-radius: 8px; border: 1px solid #dee2e6;">
-                    @endif
+            <div class="row mb-2">
+                <div class="col-sm-6">
+                   <div><strong>Student:</strong> {{ $receipt->payment?->feeAccount?->student?->student_name ?? '-' }}</div>
+                      <div><strong>Admission No.:</strong> {{ $receipt->payment?->feeAccount?->student?->admission_no ?? '-' }}</div>
+                   <div><strong>Father:</strong> {{ $receipt->payment?->feeAccount?->student?->father_name ?? '-' }}</div>
                 </div>
-                <div class="col-sm-9">
-                    <div class="row">
-                        <div class="col-sm-6">
-                            <div><strong>Student:</strong> {{ $receipt->payment?->feeAccount?->student?->student_name ?? '-' }}</div>
-                            <div><strong>Admission No.:</strong> {{ $receipt->payment?->feeAccount?->student?->admission_no ?? '-' }}</div>
-                            <div><strong>Father:</strong> {{ $receipt->payment?->feeAccount?->student?->father_name ?? '-' }}</div>
-                        </div>
-                        <div class="col-sm-6 text-sm-end">
-                            <div><strong>Date:</strong> {{ $receipt->payment?->payment_date?->format('d-m-Y H:i') ?? '-' }}</div>
-                            <div><strong>Academic Year:</strong> {{ $receipt->payment?->feeAccount?->academicYear?->year_name ?? '-' }}</div>
-                            <div><strong>Collector:</strong> {{ $receipt->payment?->collector?->full_name ?? $receipt->payment?->collector?->username ?? '-' }}</div>
-                        </div>
-                    </div>
-                </div>
+
+            <div class="col-sm-6 text-sm-end">
+              <div><strong>Date:</strong> {{ \Carbon\Carbon::parse($receipt->payment?->payment_date)->format('d-m-Y') }}</div>
+                <div><strong>Academic Year:</strong> {{ $receipt->payment?->feeAccount?->academicYear?->year_name ?? '-' }}</div>
+              <div><strong>Collector:</strong> {{ $receipt->payment?->collector?->full_name ?? $receipt->payment?->collector?->username ?? '-' }}</div>
+              </div>
             </div>
 
             <div class="table-responsive mb-3">
