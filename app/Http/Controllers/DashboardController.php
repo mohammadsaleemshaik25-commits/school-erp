@@ -64,6 +64,10 @@ class DashboardController extends Controller
             return view('dashboard.no-active-year');
         }
 
+        $todayRevenue = Payment::where('status', 'SUCCESS')
+            ->whereDate('payment_date', today())
+            ->sum('amount');
+
         $stats = [
             'total_students' => StudentEnrollment::where('academic_year_id', $activeYear->academic_year_id)->where('status', 'ACTIVE')->count(),
             'total_revenue' => Payment::where('status', 'SUCCESS')->whereHas('feeAccount.enrollment', function($q) use ($activeYear) {
@@ -82,6 +86,7 @@ class DashboardController extends Controller
 $totalRevenue = $stats['total_revenue'];
 $pendingFees = $stats['total_outstanding'];
 $academicYears = AcademicYear::count();
+$currentDate = today()->format('d M Y');
 
 return view('dashboard', compact(
     'stats',
@@ -89,8 +94,10 @@ return view('dashboard', compact(
     'role',
     'totalStudents',
     'totalRevenue',
+    'todayRevenue',
     'pendingFees',
-    'academicYears'
+    'academicYears',
+    'currentDate'
 ));
     }
 
