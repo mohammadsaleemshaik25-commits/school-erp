@@ -26,32 +26,39 @@ class BooksDecisionController extends Controller
     {
         $query = StudentFeeAccount::with(['enrollment.student', 'enrollment.classRoom', 'enrollment.section', 'enrollment.academicYear', 'decisionMaker']);
 
-        // Search Filters
-        if ($request->filled('q')) {
-            $q = $request->q;
-            $query->whereHas('enrollment.student', function ($sub) use ($q) {
-                $sub->where('student_name', 'like', "%{$q}%")
-                    ->orWhere('admission_no', 'like', "%{$q}%");
-            });
+        // Search Filters - Only apply if at least one filter is set
+        $hasSearch = $request->filled('q') || $request->filled('books_status') || $request->filled('class_id') || $request->filled('academic_year_id');
+
+        if ($hasSearch) {
+            if ($request->filled('q')) {
+                $q = $request->q;
+                $query->whereHas('enrollment.student', function ($sub) use ($q) {
+                    $sub->where('student_name', 'like', "%{$q}%")
+                        ->orWhere('admission_no', 'like', "%{$q}%");
+                });
+            }
+
+            if ($request->filled('books_status')) {
+                $query->where('books_status', $request->books_status);
+            }
+
+            if ($request->filled('class_id')) {
+                $query->whereHas('enrollment', function ($sub) use ($request) {
+                    $sub->where('class_id', $request->class_id);
+                });
+            }
+
+            if ($request->filled('academic_year_id')) {
+                $query->whereHas('enrollment', function ($sub) use ($request) {
+                    $sub->where('academic_year_id', $request->academic_year_id);
+                });
+            }
+
+            $accounts = $query->orderBy('books_status', 'desc')->paginate(20)->withQueryString();
+        } else {
+            $accounts = null; // No results until search is performed
         }
 
-        if ($request->filled('books_status')) {
-            $query->where('books_status', $request->books_status);
-        }
-
-        if ($request->filled('class_id')) {
-            $query->whereHas('enrollment', function ($sub) use ($request) {
-                $sub->where('class_id', $request->class_id);
-            });
-        }
-
-        if ($request->filled('academic_year_id')) {
-            $query->whereHas('enrollment', function ($sub) use ($request) {
-                $sub->where('academic_year_id', $request->academic_year_id);
-            });
-        }
-
-        $accounts = $query->orderBy('books_status', 'desc')->paginate(20)->withQueryString();
         $classes = ClassRoom::all();
         $academicYears = AcademicYear::all();
 

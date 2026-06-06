@@ -28,8 +28,9 @@
             <div class="col-md-3">
                 <div class="card border-0 shadow-sm bg-primary text-white h-100 overflow-hidden position-relative">
                     <div class="card-body p-3">
-                        <div class="small text-uppercase fw-bold opacity-75 mb-2" style="font-size: 0.7rem; letter-spacing: 0.5px;">Total Revenue</div>
+                        <div class="small text-uppercase fw-bold opacity-75 mb-2" style="font-size: 0.7rem; letter-spacing: 0.5px;">Your today's revenue</div>
                         <div class="h4 fw-bold mb-0">₹{{ number_format($todayCollection, 2) }}</div>
+                        <div class="small opacity-75">{{ $currentDate ?? today()->format('d M Y') }}</div>
                         <i class="bi bi-currency-rupee position-absolute end-0 bottom-0 opacity-25" style="font-size: 4rem; margin-right: -10px; margin-bottom: -15px;"></i>
                     </div>
                 </div>
@@ -117,18 +118,21 @@
                 <div class="card border-0 shadow-sm bg-white p-4 h-100 border-start border-primary border-4">
                     <p class="text-sm text-muted text-uppercase fw-bold small mb-2">Total Students</p>
                     <p class="h2 font-semibold text-indigo-900 mb-0">{{ number_format($totalStudents) }}</p>
+                    <p class="text-muted small mb-0">Active Academic Year</p>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="card border-0 shadow-sm bg-white p-4 h-100 border-start border-success border-4">
-                    <p class="text-sm text-muted text-uppercase fw-bold small mb-2">Today's Collection</p>
-                    <p class="h2 font-semibold text-indigo-900 mb-0">{{ number_format((float) $totalRevenue, 2) }}</p>
+                    `<p class="text-sm text-muted text-uppercase fw-bold small mb-2">Your Today's Revenue</p>`
+                    <p class="h2 font-semibold text-indigo-900 mb-0">₹{{ number_format((float) $todayRevenue, 2) }}</p>
+                    <p class="text-muted small mb-0 fw-bold">{{ $currentDate }}</p>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="card border-0 shadow-sm bg-white p-4 h-100 border-start border-danger border-4">
                     <p class="text-sm text-muted text-uppercase fw-bold small mb-2">Pending Fees</p>
                     <p class="h2 font-semibold text-indigo-900 mb-0">₹{{ number_format((float) $pendingFees, 2) }}</p>
+                    <p class="text-muted small mb-0">Outstanding Balance</p>
                 </div>
             </div>
             <div class="col-md-3">
@@ -140,6 +144,7 @@
                             <a href="{{ route('fees.adjustments.index', ['status' => 'PENDING']) }}" class="btn btn-sm btn-warning rounded-pill px-3 fw-bold">Review</a>
                         @endif
                     </div>
+                    <p class="text-muted small mb-0">Awaiting Approval</p>
                 </div>
             </div>
         </div>

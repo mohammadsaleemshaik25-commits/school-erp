@@ -79,88 +79,98 @@
     @endif
 
     <!-- Results Table -->
-    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light">
-                    <tr>
-                        <th class="ps-4">Student</th>
-                        <th>Class & Section</th>
-                        <th>Academic Year</th>
-                        <th>Current Status</th>
-                        <th>Decision By</th>
-                        <th>Decision Date</th>
-                        <th class="text-end pe-4">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($accounts as $account)
-                        <tr>
-                            <td class="ps-4">
-                                <div class="fw-bold text-dark">{{ $account->enrollment->student->student_name }}</div>
-                                <div class="small text-muted">{{ $account->enrollment->student->admission_no }}</div>
-                            </td>
-                            <td>
-                                <span class="badge bg-light text-dark border">{{ $account->enrollment->classRoom->class_name }}</span>
-                                <span class="badge bg-light text-dark border">{{ $account->enrollment->section->section_name }}</span>
-                            </td>
-                            <td>{{ $account->enrollment->academicYear->year_name }}</td>
-                            <td>
-                                @php
-                                    $badgeClass = match($account->books_status) {
-                                        'PENDING' => 'bg-warning',
-                                        'SCHOOL' => 'bg-primary',
-                                        'OUTSIDE' => 'bg-secondary',
-                                        'BOOKS_PAID' => 'bg-success',
-                                        default => 'bg-light text-dark'
-                                    };
-                                @endphp
-                                <span class="badge rounded-pill {{ $badgeClass }} px-3">
-                                    {{ $account->books_status }}
-                                </span>
-                            </td>
-                            <td>
-                                @if($account->decisionMaker)
-                                    <div class="small fw-semibold">{{ $account->decisionMaker->full_name ?? $account->decisionMaker->username }}</div>
-                                @else
-                                    <span class="text-muted small">Not set</span>
-                                @endif
-                            </td>
-                            <td>
-                                @if($account->books_decision_date)
-                                    <div class="small text-muted">{{ $account->books_decision_date->format('d M Y, h:i A') }}</div>
-                                @else
-                                    -
-                                @endif
-                            </td>
-                            <td class="text-end pe-4">
-                                @if($account->books_status !== 'BOOKS_PAID' || in_array(strtoupper(optional(auth()->user()->role)->role_name ?? ''), ['ADMINISTRATOR', 'ADMIN'], true))
-                                    <a href="{{ route('books.edit', $account->account_id) }}" class="btn btn-white btn-sm border shadow-sm px-3 rounded-pill">
-                                        <i class="bi bi-pencil-square me-1"></i> Change Status
-                                    </a>
-                                @else
-                                    <button class="btn btn-light btn-sm border disabled px-3 rounded-pill" title="Status Locked">
-                                        <i class="bi bi-lock-fill"></i> Locked
-                                    </button>
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="7" class="text-center py-5">
-                                <i class="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
-                                <span class="text-muted">No students found matching your criteria.</span>
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-        @if($accounts->hasPages())
-            <div class="card-footer bg-white py-3">
-                {{ $accounts->links() }}
+    @if($accounts === null)
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-search fs-1 text-muted d-block mb-3"></i>
+                <h5 class="text-muted mb-2">Enter search criteria to view students</h5>
+                <p class="text-muted small">Use the filters above to search for students by name, admission number, class, or academic year.</p>
             </div>
-        @endif
-    </div>
+        </div>
+    @else
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="ps-4">Student</th>
+                            <th>Class & Section</th>
+                            <th>Academic Year</th>
+                            <th>Current Status</th>
+                            <th>Decision By</th>
+                            <th>Decision Date</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($accounts as $account)
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-bold text-dark">{{ $account->enrollment->student->student_name }}</div>
+                                    <div class="small text-muted">{{ $account->enrollment->student->admission_no }}</div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border">{{ $account->enrollment->classRoom->class_name }}</span>
+                                    <span class="badge bg-light text-dark border">{{ $account->enrollment->section->section_name }}</span>
+                                </td>
+                                <td>{{ $account->enrollment->academicYear->year_name }}</td>
+                                <td>
+                                    @php
+                                        $badgeClass = match($account->books_status) {
+                                            'PENDING' => 'bg-warning',
+                                            'SCHOOL' => 'bg-primary',
+                                            'OUTSIDE' => 'bg-secondary',
+                                            'BOOKS_PAID' => 'bg-success',
+                                            default => 'bg-light text-dark'
+                                        };
+                                    @endphp
+                                    <span class="badge rounded-pill {{ $badgeClass }} px-3">
+                                        {{ $account->books_status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    @if($account->decisionMaker)
+                                        <div class="small fw-semibold">{{ $account->decisionMaker->full_name ?? $account->decisionMaker->username }}</div>
+                                    @else
+                                        <span class="text-muted small">Not set</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if($account->books_decision_date)
+                                        <div class="small text-muted">{{ $account->books_decision_date->format('d M Y, h:i A') }}</div>
+                                    @else
+                                        -
+                                    @endif
+                                </td>
+                                <td class="text-end pe-4">
+                                    @if($account->books_status !== 'BOOKS_PAID' || in_array(strtoupper(optional(auth()->user()->role)->role_name ?? ''), ['ADMINISTRATOR', 'ADMIN'], true))
+                                        <a href="{{ route('books.edit', $account->account_id) }}" class="btn btn-white btn-sm border shadow-sm px-3 rounded-pill">
+                                            <i class="bi bi-pencil-square me-1"></i> Change Status
+                                        </a>
+                                    @else
+                                        <button class="btn btn-light btn-sm border disabled px-3 rounded-pill" title="Status Locked">
+                                            <i class="bi bi-lock-fill"></i> Locked
+                                        </button>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="text-center py-5">
+                                    <i class="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
+                                    <span class="text-muted">No students found matching your criteria.</span>
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+            @if($accounts->hasPages())
+                <div class="card-footer bg-white py-3">
+                    {{ $accounts->links() }}
+                </div>
+            @endif
+        </div>
+    @endif
 </div>
 @endsection

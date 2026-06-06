@@ -11,7 +11,7 @@
         <div class="col-md-3">
             <div class="card border-0 shadow-sm bg-primary text-white h-100 overflow-hidden position-relative">
                 <div class="card-body p-3">
-                    <div class="small text-uppercase fw-bold opacity-75 mb-2" style="font-size: 0.7rem; letter-spacing: 0.5px;">Today's Collection</div>
+                    <div class="small text-uppercase fw-bold opacity-75 mb-2" style="font-size: 0.7rem; letter-spacing: 0.5px;">  Overall Today's Collection</div>
                     <div class="h4 fw-bold mb-0">₹{{ number_format($todayCollection, 2) }}</div>
                     <i class="bi bi-currency-rupee position-absolute end-0 bottom-0 opacity-25" style="font-size: 4rem; margin-right: -10px; margin-bottom: -15px;"></i>
                 </div>
