@@ -371,6 +371,7 @@
         new bootstrap.Modal(document.getElementById('approvalModal')).show();
     }
 </script>
+
 <style>
     .select2-container--default .select2-selection--single {
         border: 1px solid #0d6efd;
