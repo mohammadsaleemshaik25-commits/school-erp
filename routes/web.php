@@ -41,6 +41,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('/clerk/dashboard', [DashboardController::class, 'index'])->name('clerk.dashboard');
 
+        Route::get('/fees/search-students', [PaymentController::class, 'searchStudents'])->name('fees.search.students');
+        Route::get('/fees/finder', [PaymentController::class, 'finder'])->name('fees.finder');
         Route::get('/fees/collect', [PaymentController::class, 'create'])->name('fees.collect');
         Route::post('/fees/collect', [PaymentController::class, 'store'])->name('fees.payments.store');
         Route::get('/fees/ledger/{account}', [PaymentController::class, 'ledger'])->name('fees.ledger');

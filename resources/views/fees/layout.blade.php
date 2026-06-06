@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title') | Vikas High School ERP</title>
+    
+    <!-- CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    
     <style>
         :root{--brand:#0d6efd;--muted:#6c757d}
         body{background:#f6f8fa}
@@ -21,71 +25,13 @@
         /* Print styles for receipts */
         @media print{body{background:white} .topbar, .sidebar, .d-print-none{display:none} main.content-area{margin:0;padding:0}}
     </style>
+
+    <!-- Core Scripts (Loaded early to ensure availability) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
-<!-- SweetAlert2 -->
-<script>
-function openCancelModal(cancelUrl, receiptNumber) {
-
-    Swal.fire({
-        title: 'Cancel Receipt?',
-        html: `
-            <p>Receipt: <strong>${receiptNumber}</strong></p>
-            <textarea id="cancelReason"
-                      class="swal2-textarea"
-                      placeholder="Enter cancellation reason"></textarea>
-        `,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, Cancel',
-        confirmButtonColor: '#dc3545',
-        cancelButtonText: 'No'
-    }).then((result) => {
-
-        if (result.isConfirmed) {
-
-            const reason =
-                document.getElementById('cancelReason').value;
-
-            if (!reason.trim()) {
-
-                Swal.fire(
-                    'Error',
-                    'Cancellation reason is required',
-                    'error'
-                );
-
-                return;
-            }
-
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = cancelUrl;
-
-            const csrf = document.createElement('input');
-            csrf.type = 'hidden';
-            csrf.name = '_token';
-            csrf.value =
-                document.querySelector(
-                    'meta[name="csrf-token"]'
-                ).content;
-
-            const reasonInput =
-                document.createElement('input');
-
-            reasonInput.type = 'hidden';
-            reasonInput.name = 'cancellation_reason';
-            reasonInput.value = reason;
-
-            form.appendChild(csrf);
-            form.appendChild(reasonInput);
-
-            document.body.appendChild(form);
-            form.submit();
-        }
-    });
-}
-</script>
-
 
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow fixed-top topbar">
@@ -144,7 +90,6 @@ function openCancelModal(cancelUrl, receiptNumber) {
             <nav class="nav flex-column px-3 pb-4">
                 @php $role = strtoupper(optional(auth()->user()->role)->role_name ?? ''); @endphp
 
-                {{-- CLERK + ALL --}}
                 <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('dashboard') || request()->routeIs('clerk.dashboard') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('dashboard') }}">
                     <i class="bi bi-speedometer2 me-3 fs-5"></i>
                     <span class="fw-semibold">Dashboard</span>
@@ -171,12 +116,10 @@ function openCancelModal(cancelUrl, receiptNumber) {
                     <span class="fw-semibold">Admissions</span>
                 </a>
 
-                @if(in_array($role, ['ADMINISTRATOR', 'ADMIN', 'PRINCIPAL', 'CORRESPONDENT']))
                 <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('promotions.*') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('promotions.index') }}">
                     <i class="bi bi-arrow-up-right-circle me-3 fs-5"></i>
                     <span class="fw-semibold">Promotions</span>
                 </a>
-                @endif
                 @endif
 
                 <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('fees.reports.closing') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('fees.reports.closing') }}">
@@ -287,125 +230,86 @@ function openCancelModal(cancelUrl, receiptNumber) {
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Layout Scripts -->
+    <script>
+        function openCancelModal(cancelUrl, receiptNumber) {
+            Swal.fire({
+                title: 'Cancel Receipt?',
+                html: `<p>Receipt: <strong>${receiptNumber}</strong></p><textarea id="cancelReason" class="swal2-textarea" placeholder="Enter cancellation reason"></textarea>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, Cancel',
+                confirmButtonColor: '#dc3545',
+                cancelButtonText: 'No'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const reason = document.getElementById('cancelReason').value;
+                    if (!reason.trim()) {
+                        Swal.fire('Error', 'Cancellation reason is required', 'error');
+                        return;
+                    }
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = cancelUrl;
+                    form.innerHTML = `<input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').content}"><input type="hidden" name="cancellation_reason" value="${reason}">`;
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
+        }
 
-@stack('scripts')
+        function openConcessionModal(data) {
+            $('#modal_account_id').val(data.account_id);
+            $('#modal_student_name').text(data.student_name);
+            $('#modal_admission_no').text(data.admission_no + ' | ' + data.class_name);
+            $('#modal_tuition_fee').text('₹' + parseFloat(data.tuition_fee).toLocaleString());
+            $('#modal_current_due').text('₹' + parseFloat(data.current_due).toLocaleString());
+            window.currentTuitionFee = parseFloat(data.tuition_fee);
+            $('#modal_discount_percent').val('');
+            $('#modal_discount_amount').val('');
+            $('[name="reason"]').val('');
+            new bootstrap.Modal(document.getElementById('concessionModal')).show();
+        }
 
+        $(document).ready(function() {
+            $('#modal_discount_percent').on('input', function() {
+                const percent = parseFloat($(this).val());
+                if (!isNaN(percent) && window.currentTuitionFee > 0) {
+                    $('#modal_discount_amount').val((window.currentTuitionFee * percent / 100).toFixed(2));
+                } else {
+                    $('#modal_discount_amount').val('');
+                }
+            });
 
-
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-<script>
-    function openConcessionModal(data) {
-        $('#modal_account_id').val(data.account_id);
-        $('#modal_student_name').text(data.student_name);
-        $('#modal_admission_no').text(data.admission_no + ' | ' + data.class_name);
-        $('#modal_tuition_fee').text('₹' + parseFloat(data.tuition_fee).toLocaleString());
-        $('#modal_current_due').text('₹' + parseFloat(data.current_due).toLocaleString());
-        
-        window.currentTuitionFee = parseFloat(data.tuition_fee);
-        
-        // Clear previous values
-        $('#modal_discount_percent').val('');
-        $('#modal_discount_amount').val('');
-        $('[name="reason"]').val('');
-        
-        new bootstrap.Modal(document.getElementById('concessionModal')).show();
-    }
-
-    $(document).ready(function() {
-        $('#modal_discount_percent').on('input', function() {
-            const percent = parseFloat($(this).val());
-            if (!isNaN(percent) && window.currentTuitionFee > 0) {
-                const amount = (window.currentTuitionFee * percent / 100).toFixed(2);
-                $('#modal_discount_amount').val(amount);
-            } else {
-                $('#modal_discount_amount').val('');
-            }
+            $('#modal_discount_amount').on('input', function() {
+                const amount = parseFloat($(this).val());
+                if (!isNaN(amount) && window.currentTuitionFee > 0) {
+                    $('#modal_discount_percent').val((amount / window.currentTuitionFee * 100).toFixed(2));
+                } else {
+                    $('#modal_discount_percent').val('');
+                }
+            });
         });
+    </script>
 
-        $('#modal_discount_amount').on('input', function() {
-            const amount = parseFloat($(this).val());
-            if (!isNaN(amount) && window.currentTuitionFee > 0) {
-                const percent = (amount / window.currentTuitionFee * 100).toFixed(2);
-                $('#modal_discount_percent').val(percent);
-            } else {
-                $('#modal_discount_percent').val('');
-            }
+    {{-- Session Notifications --}}
+    <script>
+        $(document).ready(function() {
+            @if(session('success'))
+                Swal.fire({ icon: 'success', title: 'Success', text: @json(session('success')), confirmButtonColor: '#0d6efd', timer: 3000, timerProgressBar: true });
+            @endif
+            @if(session('error'))
+                Swal.fire({ icon: 'error', title: 'Error', text: @json(session('error')), confirmButtonColor: '#dc3545' });
+            @endif
+            @if(session('warning'))
+                Swal.fire({ icon: 'warning', title: 'Warning', text: @json(session('warning')), confirmButtonColor: '#ffc107' });
+            @endif
+            @if($errors->any())
+                Swal.fire({ icon: 'error', title: 'Validation Error', html: `<ul style="text-align:left;">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>`, confirmButtonColor: '#dc3545' });
+            @endif
         });
-    });
-</script>
+    </script>
 
-{{-- Success Message --}}
-@if(session('success'))
-<script>
-Swal.fire({
-    icon: 'success',
-    title: 'Success',
-    text: @json(session('success')),
-    confirmButtonColor: '#0d6efd',
-    timer: 3000,
-    timerProgressBar: true
-});
-</script>
-@endif
-
-{{-- Error Message --}}
-@if(session('error'))
-<script>
-Swal.fire({
-    icon: 'error',
-    title: 'Error',
-    text: {{ json_encode(session('error')) }},
-    confirmButtonColor: '#dc3545'
-});
-</script>
-@endif
-
-{{-- Warning Message --}}
-@if(session('warning'))
-<script>
-Swal.fire({
-    icon: 'warning',
-    title: 'Warning',
-    text: @json(session('warning')),
-    confirmButtonColor: '#ffc107'
-});
-</script>
-@endif
-
-{{-- Info Message --}}
-@if(session('info'))
-<script>
-Swal.fire({
-    icon: 'info',
-    title: 'Information',
-    text: @json(session('info')),
-    confirmButtonColor: '#0dcaf0'
-});
-</script>
-@endif
-
-{{-- Validation Errors --}}
-@if($errors->any())
-<script>
-Swal.fire({
-    icon: 'error',
-    title: 'Validation Error',
-    html: `
-        <ul style="text-align:left;">
-            @foreach($errors->all() as $error)
-                <li>{{ $error }}</li>
-            @endforeach
-        </ul>
-    `,
-    confirmButtonColor: '#dc3545'
-});
-</script>
-@endif
-
-
+    @stack('scripts')
 </body>
 </html>

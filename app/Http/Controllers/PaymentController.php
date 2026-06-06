@@ -9,7 +9,9 @@ use App\Models\ClassRoom;
 use App\Models\Section;
 use App\Models\AcademicYear;
 use Illuminate\Http\Request;
+use App\Models\Payment;
 use Exception;
+use App\Models\Student;   // ADD THIS
 
 class PaymentController extends Controller
 {
@@ -26,73 +28,47 @@ class PaymentController extends Controller
     public function create(Request $request)
     {
         $account = null;
-        $searchResults = null;
 
         // Fetch classrooms and sections for search filter dropdowns
         $classes = ClassRoom::all();
         $sections = Section::all();
 
-        // Scenario A: Clerk selected a student and loaded their checkout ledger
+        // Scenario: Clerk selected a student and loaded their checkout ledger
         if ($request->filled('account_id')) {
-            $account = StudentFeeAccount::with(['enrollment.student', 'enrollment.academicYear'])
+            $account = StudentFeeAccount::with(['enrollment.student', 'enrollment.academicYear', 'enrollment.classRoom', 'enrollment.section'])
                 ->findOrFail($request->get('account_id'));
         } 
-        // Scenario B: Clerk is running a search on the desk
-        elseif ($request->anyFilled(['q', 'admission_no', 'student_name', 'class_id', 'section_id', 'academic_year_id'])) {
-            $selectedYearId = $request->get('academic_year_id');
-            if (!$selectedYearId) {
-                $activeYear = AcademicYear::where('is_active', true)->first();
-                $selectedYearId = $activeYear ? $activeYear->academic_year_id : null;
-            }
 
-            $query = StudentFeeAccount::with(['enrollment.student', 'enrollment.academicYear', 'enrollment.classRoom', 'enrollment.section'])
-                ->whereHas('enrollment', function($q) use ($selectedYearId) {
-                    $q->where('academic_year_id', $selectedYearId);
-                });
+        // Dashboard stats for fee collection page
+        $todayCollection = Payment::whereDate('payment_date', today())
+            ->where('status', '!=', 'CANCELLED')
+            ->sum('amount');
 
-            // Universal Search Box (q)
-            if ($request->filled('q')) {
-                $q = $request->q;
-                $query->whereHas('enrollment.student', function ($sub) use ($q) {
-                    $sub->where(function($inner) use ($q) {
-                        $inner->where('admission_no', 'like', "%{$q}%")
-                              ->orWhere('student_name', 'like', "%{$q}%")
-                              ->orWhere('father_name', 'like', "%{$q}%")
-                              ->orWhere('mother_name', 'like', "%{$q}%")
-                              ->orWhere('guardian_name', 'like', "%{$q}%")
-                              ->orWhere('phone_primary', 'like', "%{$q}%")
-                              ->orWhere('phone_secondary', 'like', "%{$q}%");
-                    });
-                });
-            }
+        $clerkReceipts = Payment::whereDate('payment_date', today())
+            ->where('collected_by', auth()->id())
+            ->where('status', 'SUCCESS')
+            ->count();
 
-            // Individual Filters (These are now in enrollment or enrollment.student)
-            if ($request->filled('admission_no') || $request->filled('student_name')) {
-                $query->whereHas('enrollment.student', function ($sub) use ($request) {
-                    if ($request->filled('admission_no')) {
-                        $sub->where('admission_no', 'like', "%{$request->admission_no}%");
-                    }
-                    if ($request->filled('student_name')) {
-                        $sub->where('student_name', 'like', "%{$request->student_name}%");
-                    }
-                });
-            }
+        $cancelledReceipts = Payment::whereDate('payment_date', today())
+            ->where('status', 'CANCELLED')
+            ->count();
 
-            if ($request->filled('class_id') || $request->filled('section_id')) {
-                $query->whereHas('enrollment', function ($sub) use ($request) {
-                    if ($request->filled('class_id')) {
-                        $sub->where('class_id', $request->class_id);
-                    }
-                    if ($request->filled('section_id')) {
-                        $sub->where('section_id', $request->section_id);
-                    }
-                });
-            }
+        $totalDue = StudentFeeAccount::sum('total_due');
 
-            $searchResults = $query->paginate(15)->appends($request->all());
-        }
+        $totalPaid = Payment::where('status', 'SUCCESS')
+            ->sum('amount');
 
-        return view('fees.collect', compact('account', 'searchResults', 'classes', 'sections'));
+        $totalPending = max(0, $totalDue - $totalPaid);
+
+        return view('fees.collect', compact(
+            'account',
+            'classes',
+            'sections',
+            'todayCollection',
+            'clerkReceipts',
+            'cancelledReceipts',
+            'totalPending'
+        ));
     }
 
     /**
@@ -205,5 +181,113 @@ class PaymentController extends Controller
                 ->back()
                 ->withErrors(['error' => $e->getMessage()]);
         }
+    }
+    public function searchStudents(Request $request)
+    {
+        $term = trim($request->get('term', ''));
+
+        if (empty($term)) {
+            return response()->json([]);
+        }
+
+        // Search for active fee accounts matching the student name or admission number
+        $accounts = StudentFeeAccount::with(['enrollment.student'])
+            ->whereHas('enrollment.student', function ($query) use ($term) {
+                $query->where('student_name', 'like', '%' . $term . '%')
+                      ->orWhere('admission_no', 'like', '%' . $term . '%');
+            })
+            ->limit(20)
+            ->get();
+
+        return response()->json(
+            $accounts->map(function ($account) {
+                return [
+                    'id' => $account->account_id,
+                    'text' => $account->enrollment->student->student_name . 
+                             ' (' . $account->enrollment->student->admission_no . ')'
+                ];
+            })->values()
+        );
+    }
+
+    /**
+     * Professional Student Finder AJAX Endpoint
+     */
+    public function finder(Request $request)
+    { 
+        $q = trim($request->get('q', ''));
+        $classId = $request->get('class_id');
+        $sectionId = $request->get('section_id');
+        $gender = $request->get('gender');
+
+        // If everything is empty, return empty results
+        if (empty($q) && empty($classId) && empty($sectionId) && empty($gender)) {
+            return response()->json([]);
+        }
+
+        $activeYear = AcademicYear::where('is_active', true)->first();
+        if (!$activeYear) return response()->json([]);
+
+        $query = StudentFeeAccount::with([
+                'enrollment.student', 
+                'enrollment.classRoom', 
+                'enrollment.section'
+            ])
+            ->whereHas('enrollment', function($query) use ($activeYear, $classId, $sectionId) {
+                $query->where('academic_year_id', $activeYear->academic_year_id);
+                if ($classId) $query->where('class_id', $classId);
+                if ($sectionId) $query->where('section_id', $sectionId);
+            });
+
+        if ($gender) {
+            $query->whereHas('enrollment.student', function($query) use ($gender) {
+                $query->where('gender', $gender);
+            });
+        }
+
+        if (!empty($q)) {
+            $query->whereHas('enrollment.student', function ($query) use ($q) {
+                $query->where(function($inner) use ($q) {
+                    // Name Prioritization: Starts with q, then matches q anywhere
+                    $inner->where('student_name', 'like', "{$q}%")
+                          ->orWhere('student_name', 'like', "%{$q}%")
+                          ->orWhere('admission_no', 'like', "{$q}%")
+                          ->orWhere('father_name', 'like', "%{$q}%")
+                          ->orWhere('mother_name', 'like', "%{$q}%")
+                          ->orWhere('guardian_name', 'like', "%{$q}%");
+                });
+            });
+            
+            // Order results to prioritize "starts with" name
+            $query->join('student_enrollments', 'student_fee_accounts.enrollment_id', '=', 'student_enrollments.enrollment_id')
+                  ->join('students', 'student_enrollments.student_id', '=', 'students.student_id')
+                  ->orderByRaw("CASE 
+                        WHEN students.student_name LIKE ? THEN 1 
+                        WHEN students.student_name LIKE ? THEN 2 
+                        WHEN students.admission_no LIKE ? THEN 3 
+                        ELSE 4 
+                    END ASC", ["{$q}%", "%{$q}%", "{$q}%"])
+                  ->select('student_fee_accounts.*');
+        }
+
+        $results = $query->limit(20)->get();
+
+        return response()->json(
+            $results->map(function ($acc) {
+                $student = $acc->enrollment->student;
+                return [
+                    'account_id' => $acc->account_id,
+                    'student_name' => strtoupper($student->student_name),
+                    'admission_no' => $student->admission_no,
+                    'class_name' => $acc->enrollment->classRoom->class_name,
+                    'section_name' => $acc->enrollment->section->section_name ?? 'N/A',
+                    'gender' => $student->gender,
+                    'father_name' => $student->father_name,
+                    'mother_name' => $student->mother_name,
+                    'phone_primary' => $student->phone_primary,
+                    'photo_url' => $student->photo_path ? asset('storage/' . $student->photo_path) : null,
+                ];
+            })
+        );
     }
 }

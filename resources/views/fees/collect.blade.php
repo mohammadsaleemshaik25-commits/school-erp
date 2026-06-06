@@ -4,15 +4,7 @@
 
 @section('content')
 <div class="container-fluid">
-@php
-    $todayCollection = \App\Models\Payment::whereDate('payment_date', today())->where('status', '!=', 'CANCELLED')->sum('amount');
-    $clerkReceipts = \App\Models\Payment::whereDate('payment_date', today())->where('collected_by', auth()->id())->count();
-    $cancelledReceipts = \App\Models\Payment::whereDate('payment_date', today())->where('status', 'CANCELLED')->count();
-    
-    $totalDue = \App\Models\StudentFeeAccount::sum('total_due');
-    $totalPaid = \App\Models\Payment::where('status', 'SUCCESS')->sum('amount');
-    $totalPending = max(0.00, $totalDue - $totalPaid);
-@endphp
+
 
 <div class="mb-4">
     <div class="row g-3">
@@ -75,153 +67,120 @@
     @endif
 </div>
 
-<!-- Improved Student Search Panel -->
+<!-- Professional Student Finder UI -->
 @if(!$account)
-    <div class="card border-0 shadow-sm mb-4 rounded-4 overflow-hidden">
+    <div class="card border-0 shadow-sm mb-4 rounded-4 overflow-hidden finder-container">
         <div class="card-header bg-white border-bottom py-3">
-            <div class="d-flex align-items-center">
-                <div class="bg-primary bg-opacity-10 p-2 rounded-3 me-3">
-                    <i class="bi bi-search text-primary"></i>
+            <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <div class="bg-primary bg-opacity-10 p-2 rounded-3 me-3">
+                        <i class="bi bi-person-bounding-box text-primary fs-5"></i>
+                    </div>
+                    <div>
+                        <h6 class="m-0 fw-bold text-dark">Professional Student Finder</h6>
+                        <small class="text-muted">Live search by Name, Admission No, or Parent Name</small>
+                    </div>
                 </div>
-                <h6 class="m-0 fw-bold text-dark">Search Student Ledger</h6>
+                <div class="d-flex gap-2">
+                    <select id="filterClass" class="form-select form-select-sm rounded-pill px-3 shadow-none finder-filter">
+                        <option value="">All Classes</option>
+                        @foreach($classes as $cls)
+                            <option value="{{ $cls->class_id }}">{{ $cls->class_name }}</option>
+                        @endforeach
+                    </select>
+                    <select id="filterSection" class="form-select form-select-sm rounded-pill px-3 shadow-none finder-filter">
+                        <option value="">All Sections</option>
+                        @foreach($sections as $sec)
+                            <option value="{{ $sec->section_id }}">{{ $sec->section_name }}</option>
+                        @endforeach
+                    </select>
+                    <select id="filterGender" class="form-select form-select-sm rounded-pill px-3 shadow-none finder-filter">
+                        <option value="">Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
             </div>
         </div>
-        <div class="card-body p-4">
-            <form action="{{ route('fees.collect') }}" method="GET">
-                <div class="row g-4">
-                    <div class="col-md-4">
-                        <label class="form-label small fw-bold text-muted text-uppercase mb-2">Universal Search</label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search"></i></span>
-                            <input type="text" name="q" value="{{ request('q') }}" placeholder="Name, Adm No, Parent, Phone..." class="form-control border-start-0 ps-0 shadow-none">
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label small fw-bold text-muted text-uppercase mb-2">Class</label>
-                        <select name="class_id" class="form-select shadow-none">
-                            <option value="">All Classes</option>
-                            @foreach($classes as $cls)
-                                <option value="{{ $cls->class_id }}" {{ request('class_id') == $cls->class_id ? 'selected' : '' }}>
-                                    {{ $cls->class_name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label small fw-bold text-muted text-uppercase mb-2">Section</label>
-                        <select name="section_id" class="form-select shadow-none">
-                            <option value="">All Sections</option>
-                            @foreach($sections as $sec)
-                                <option value="{{ $sec->section_id }}" {{ request('section_id') == $sec->section_id ? 'selected' : '' }}>
-                                    {{ $sec->section_name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label small fw-bold text-muted text-uppercase mb-2">Academic Year</label>
-                        <select name="academic_year_id" class="form-select shadow-none">
-                            @php $academicYears = \App\Models\AcademicYear::orderBy('year_name', 'desc')->get(); @endphp
-                            @foreach($academicYears as $year)
-                                <option value="{{ $year->academic_year_id }}" {{ request('academic_year_id', \App\Models\AcademicYear::where('is_active', true)->first()?->academic_year_id) == $year->academic_year_id ? 'selected' : '' }}>
-                                    {{ $year->year_name }} {{ $year->is_active ? '(Active)' : '' }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100 shadow-sm rounded-pill py-2">
-                            <i class="bi bi-filter me-2"></i> Filter
-                        </button>
-                    </div>
+        <div class="card-body p-4 bg-light bg-opacity-50">
+            <div class="search-wrapper mb-4">
+                <div class="input-group input-group-lg shadow-sm rounded-pill overflow-hidden border">
+                    <span class="input-group-text bg-white border-0 ps-4 text-primary"><i class="bi bi-search"></i></span>
+                    <input type="text" id="finderInput" class="form-control border-0 py-3 shadow-none" 
+                           placeholder="Type at least 2 characters to find students..." autocomplete="off">
                 </div>
-            </form>
+            </div>
+
+            <!-- Results Grid -->
+            <div id="finderResults" class="row g-4">
+                <div class="col-12 text-center py-5">
+                    <div class="opacity-50 mb-3">
+                        <i class="bi bi-search" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="text-muted fw-normal">Start typing student name, admission number, or parent name.</h5>
+                </div>
+            </div>
+
+            <!-- Loading Spinner (Hidden) -->
+            <div id="finderLoading" class="text-center py-5 d-none">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2 text-muted">Searching students...</p>
+            </div>
         </div>
     </div>
 
-    <!-- Render Search Results Card -->
-    @if($searchResults)
-        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
-            <div class="card-header bg-white border-bottom py-3">
-                <h6 class="m-0 fw-bold text-dark">Matching Student Records ({{ $searchResults->total() }})</h6>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="bg-light">
-                        <tr class="small text-uppercase fw-bold text-muted" style="letter-spacing: 0.5px;">
-                            <th class="px-4 py-3">Student / Admission</th>
-                            <th class="py-3">Parent / Contact</th>
-                            <th class="py-3 text-center">Class / Section</th>
-                            <th class="py-3 text-end">Outstanding Due</th>
-                            <th class="py-3 text-center">Status</th>
-                            <th class="px-4 py-3 text-end">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($searchResults as $res)
-                            <tr>
-                                <td class="px-4">
-                                    <div class="fw-bold text-dark">{{ $res->student?->student_name ?? 'N/A' }}</div>
-                                    <div class="small text-muted font-monospace">{{ $res->student?->admission_no ?? '-' }}</div>
-                                </td>
-                                <td>
-                                    <div class="small"><span class="text-muted">F:</span> {{ $res->student?->father_name ?? 'N/A' }}</div>
-                                    <div class="small text-muted" style="font-size: 0.75rem;">
-                                        <i class="bi bi-telephone me-1"></i>{{ $res->student?->phone_primary ?? '-' }}
-                                    </div>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 fw-normal px-2">
-                                        {{ optional($res->classRoom)->class_name ?? '-' }} - {{ optional($res->section)->section_name ?? '-' }}
-                                    </span>
-                                </td>
-                                <td class="text-end fw-bold text-danger font-monospace">₹{{ number_format($res->remaining_balance, 2) }}</td>
-                                <td class="text-center">
-                                    <span class="badge rounded-pill py-1 px-3 
-                                        {{ $res->status === 'PAID' ? 'bg-success-subtle text-success border border-success' : ($res->status === 'PARTIALLY_PAID' ? 'bg-warning-subtle text-warning border border-warning' : 'bg-danger-subtle text-danger border border-danger') }}">
-                                        {{ $res->status }}
-                                    </span>
-                                </td>
-                                <td class="px-4 text-end">
-                                    <div class="btn-group">
-                                        <a href="{{ route('fees.collect', ['account_id' => $res->account_id]) }}" class="btn btn-primary btn-sm rounded-pill shadow-sm px-3">
-                                            Collect Fee
-                                        </a>
-                                        <button type="button" class="btn btn-warning btn-sm rounded-pill shadow-sm px-3 ms-1" 
-                                                onclick="openConcessionModal({
-                                                    account_id: '{{ $res->account_id }}',
-                                                    student_name: '{{ addslashes($res->student->student_name) }}',
-                                                    admission_no: '{{ $res->student->admission_no }}',
-                                                    class_name: '{{ $res->classRoom->class_name }}',
-                                                    tuition_fee: '{{ $res->final_tuition_fee }}',
-                                                    current_due: '{{ $res->remaining_balance }}'
-                                                })">
-                                            Concession
-                                        </button>
-                                        <a href="{{ route('fees.ledger', $res->account_id) }}" class="btn btn-outline-secondary btn-sm rounded-pill shadow-sm px-3 ms-1">
-                                            Ledger
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="6" class="text-center py-5 text-muted">
-                                    <i class="bi bi-search fs-1 d-block mb-3 opacity-25"></i>
-                                    No student accounts matched your criteria.
-                                </td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-            @if($searchResults->hasPages())
-                <div class="card-footer bg-white border-top py-3">
-                    {{ $searchResults->links() }}
-                </div>
-            @endif
-        </div>
-    @endif
+    <style>
+        .finder-container { transition: all 0.3s ease; }
+        .search-wrapper .input-group:focus-within { border-color: var(--bs-primary) !important; box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1) !important; }
+        
+        .student-card {
+            cursor: pointer;
+            transition: all 0.2s ease;
+            height: 100%;
+            border: 1px solid rgba(0,0,0,0.05);
+            background: #fff;
+        }
+        .student-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 1rem 3rem rgba(0,0,0,0.1) !important;
+            border-color: var(--bs-primary);
+        }
+        .student-card .photo-container {
+            width: 80px;
+            height: 80px;
+            background: #f8f9fa;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .student-card .photo-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .student-card .student-name {
+            font-size: 1rem;
+            color: #1a1a1a;
+            margin-bottom: 2px;
+        }
+        .student-card .admission-no {
+            font-size: 0.85rem;
+            font-family: var(--bs-font-monospace);
+            color: var(--bs-primary);
+        }
+        .student-card .info-row {
+            font-size: 0.8rem;
+            margin-bottom: 4px;
+        }
+        .student-card .contact-badge {
+            font-size: 0.9rem;
+            background: #f8f9fa;
+            color: #333;
+            border: 1px dashed #ccc;
+        }
+    </style>
 @else
     <!-- Specific Checkout Ledger Screen -->
     <div class="row g-4">
@@ -515,7 +474,7 @@
 
 <div class="mb-4 d-none" id="ref_container">
     
-    <label class="form-label small fw-bold text-muted text-uppercase mb-2">UPI / Reference Number</label>
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-2">UPI / Reference Number</label>
                                 <input type="text" name="transaction_reference" id="transaction_reference"
                                        class="form-control rounded-3" placeholder="Enter Transaction ID">
                             </div>
@@ -539,6 +498,7 @@
     </div>
 @endif
 
+@push('scripts')
 <script>
     function toggleRefField(val) {
         const refContainer = document.getElementById('ref_container');
@@ -571,16 +531,126 @@
             confirmButtonText: 'Yes, Save Payment'
         }).then((result) => {
             if (result.isConfirmed) {
-                // Disable button and show spinner
                 btn.disabled = true;
                 btn.querySelector('.spinner-border').classList.remove('d-none');
                 btn.querySelector('.btn-icon').classList.add('d-none');
                 btn.querySelector('.btn-text').innerText = 'Processing...';
-                
                 form.submit();
             }
         });
     }
+
+    $(document).ready(function () {
+        // Professional Student Finder Logic
+        const finderInput = $('#finderInput');
+        const finderResults = $('#finderResults');
+        const finderLoading = $('#finderLoading');
+        const finderFilters = $('.finder-filter');
+        let searchTimeout = null;
+
+        function performSearch() {
+            const q = finderInput.val().trim();
+            const class_id = $('#filterClass').val();
+            const section_id = $('#filterSection').val();
+            const gender = $('#filterGender').val();
+
+            // Clear results if search is too short and no filters are selected
+            if (q.length < 2 && !class_id && !section_id && !gender) {
+                finderResults.html(`
+                    <div class="col-12 text-center py-5">
+                        <div class="opacity-50 mb-3">
+                            <i class="bi bi-search" style="font-size: 3rem;"></i>
+                        </div>
+                        <h5 class="text-muted fw-normal">Start typing student name, admission number, or parent name.</h5>
+                    </div>
+                `).removeClass('d-none');
+                return;
+            }
+
+            finderLoading.removeClass('d-none');
+            finderResults.addClass('d-none');
+
+            $.ajax({
+                url: "{{ route('fees.finder') }}",
+                data: { q, class_id, section_id, gender },
+                success: function(data) {
+                    finderLoading.addClass('d-none');
+                    finderResults.removeClass('d-none');
+                    
+                    if (data.length === 0) {
+                        finderResults.html(`
+                            <div class="col-12 text-center py-5">
+                                <div class="opacity-50 mb-3">
+                                    <i class="bi bi-person-x" style="font-size: 3rem;"></i>
+                                </div>
+                                <h5 class="text-muted fw-normal">No students found matching your search.</h5>
+                            </div>
+                        `);
+                        return;
+                    }
+
+                    let html = '';
+                    data.forEach(student => {
+                        const photo = student.photo_url 
+                            ? `<img src="${student.photo_url}" alt="Photo">`
+                            : `<div class="d-flex align-items-center justify-content-center h-100 text-muted small bg-light">No Photo</div>`;
+
+                        html += `
+                            <div class="col-xl-3 col-lg-4 col-md-6">
+                                <div class="card student-card border-0 shadow-sm rounded-4 p-3" onclick="window.location.href='{{ route('fees.collect') }}?account_id=${student.account_id}'">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <div class="photo-container rounded-circle overflow-hidden me-3 flex-shrink-0">
+                                            ${photo}
+                                        </div>
+                                        <div class="overflow-hidden">
+                                            <div class="student-name fw-bold text-truncate" title="${student.student_name}">${student.student_name}</div>
+                                            <div class="admission-no">${student.admission_no}</div>
+                                        </div>
+                                    </div>
+                                    <div class="info-grid mb-3">
+                                        <div class="info-row d-flex justify-content-between">
+                                            <span class="text-muted">Class / Sec:</span>
+                                            <span class="fw-semibold">${student.class_name} / ${student.section_name}</span>
+                                        </div>
+                                        <div class="info-row d-flex justify-content-between">
+                                            <span class="text-muted">Gender:</span>
+                                            <span class="fw-semibold">${student.gender}</span>
+                                        </div>
+                                        <div class="info-row d-flex justify-content-between">
+                                            <span class="text-muted">Father:</span>
+                                            <span class="fw-semibold text-truncate ms-2">${student.father_name}</span>
+                                        </div>
+                                        <div class="info-row d-flex justify-content-between">
+                                            <span class="text-muted">Mother:</span>
+                                            <span class="fw-semibold text-truncate ms-2">${student.mother_name || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                    <div class="contact-badge rounded-pill py-2 px-3 text-center fw-bold">
+                                        <i class="bi bi-telephone-fill me-2 text-primary small"></i>${student.phone_primary}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    finderResults.html(html);
+                },
+                error: function() {
+                    finderLoading.addClass('d-none');
+                    finderResults.removeClass('d-none').html('<div class="col-12 text-center text-danger py-5">Error searching students. Please try again.</div>');
+                }
+            });
+        }
+
+        finderInput.on('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(performSearch, 300);
+        });
+
+        finderFilters.on('change', performSearch);
+    });
 </script>
-</div>
+@endpush
+
+
+
 @endsection
