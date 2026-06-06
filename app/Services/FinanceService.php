@@ -369,4 +369,14 @@ class FinanceService
             return $receipt;
         });
     }
+    protected function generateReceiptNumber(): string
+{
+    $lastReceipt = \App\Models\Receipt::orderByDesc('receipt_id')->first();
+
+    $nextId = $lastReceipt
+        ? ($lastReceipt->receipt_id + 1)
+        : 1;
+
+    return 'RCP-' . date('Y') . '-' . str_pad($nextId, 6, '0', STR_PAD_LEFT);
+}
 }

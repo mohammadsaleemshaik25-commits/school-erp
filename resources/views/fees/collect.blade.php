@@ -514,16 +514,8 @@
 @endif
 
 <div class="mb-4 d-none" id="ref_container">
-    <label class="form-label small fw-bold text-muted text-uppercase mb-2">
-        UPI / Reference Number
-    </label>
-    <input type="text"
-           name="transaction_reference"
-           id="transaction_reference"
-           class="form-control rounded-3"
-           placeholder="Enter Transaction ID">
-</div>
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-2">UPI / Reference Number</label>
+    
+    <label class="form-label small fw-bold text-muted text-uppercase mb-2">UPI / Reference Number</label>
                                 <input type="text" name="transaction_reference" id="transaction_reference"
                                        class="form-control rounded-3" placeholder="Enter Transaction ID">
                             </div>
