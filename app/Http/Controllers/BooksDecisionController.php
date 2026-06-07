@@ -24,45 +24,44 @@ class BooksDecisionController extends Controller
      */
     public function index(Request $request)
     {
-        $query = StudentFeeAccount::with(['enrollment.student', 'enrollment.classRoom', 'enrollment.section', 'enrollment.academicYear', 'decisionMaker']);
+        // 1. Existing Fee Accounts needing books decision
+        $accountQuery = StudentFeeAccount::with(['enrollment.student', 'enrollment.classRoom', 'enrollment.section', 'enrollment.academicYear', 'decisionMaker'])
+            ->where('books_status', 'PENDING');
 
-        // Search Filters - Only apply if at least one filter is set
-        $hasSearch = $request->filled('q') || $request->filled('books_status') || $request->filled('class_id') || $request->filled('academic_year_id');
+        // 2. NEW: Approved Admissions needing books decision (to create fee account)
+        $admissionQuery = \App\Models\Admission::with(['student', 'classRoom', 'section', 'academicYear'])
+            ->where('admission_status', 'APPROVED')
+            ->whereDoesntHave('student.enrollments', function($q) {
+                $q->where('status', 'ACTIVE');
+            });
 
-        if ($hasSearch) {
-            if ($request->filled('q')) {
-                $q = $request->q;
-                $query->whereHas('enrollment.student', function ($sub) use ($q) {
-                    $sub->where('student_name', 'like', "%{$q}%")
-                        ->orWhere('admission_no', 'like', "%{$q}%");
-                });
-            }
-
-            if ($request->filled('books_status')) {
-                $query->where('books_status', $request->books_status);
-            }
-
-            if ($request->filled('class_id')) {
-                $query->whereHas('enrollment', function ($sub) use ($request) {
-                    $sub->where('class_id', $request->class_id);
-                });
-            }
-
-            if ($request->filled('academic_year_id')) {
-                $query->whereHas('enrollment', function ($sub) use ($request) {
-                    $sub->where('academic_year_id', $request->academic_year_id);
-                });
-            }
-
-            $accounts = $query->orderBy('books_status', 'desc')->paginate(20)->withQueryString();
-        } else {
-            $accounts = null; // No results until search is performed
+        // Apply Filters
+        if ($request->filled('q')) {
+            $q = $request->q;
+            $accountQuery->whereHas('enrollment.student', function ($sub) use ($q) {
+                $sub->where('student_name', 'like', "%{$q}%")
+                    ->orWhere('admission_no', 'like', "%{$q}%");
+            });
+            $admissionQuery->whereHas('student', function ($sub) use ($q) {
+                $sub->where('student_name', 'like', "%{$q}%")
+                    ->orWhere('admission_no', 'like', "%{$q}%");
+            });
         }
+
+        if ($request->filled('class_id')) {
+            $accountQuery->whereHas('enrollment', function ($sub) use ($request) {
+                $sub->where('class_id', $request->class_id);
+            });
+            $admissionQuery->where('class_id', $request->class_id);
+        }
+
+        $accounts = $accountQuery->get();
+        $newAdmissions = $admissionQuery->get();
 
         $classes = ClassRoom::all();
         $academicYears = AcademicYear::all();
 
-        return view('books.index', compact('accounts', 'classes', 'academicYears'));
+        return view('books.index', compact('accounts', 'newAdmissions', 'classes', 'academicYears'));
     }
 
     /**
@@ -116,6 +115,34 @@ class BooksDecisionController extends Controller
                 'error' => $e->getMessage(),
                 'account_id' => $account->account_id
             ]);
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Store the decision for a NEW admission (Finalizes the admission)
+     */
+    public function finalizeAdmission(Request $request, $admissionId)
+    {
+        $request->validate([
+            'books_status' => 'required|in:SCHOOL,OUTSIDE',
+            'confirm_student_name' => 'required|string',
+        ]);
+
+        $admission = \App\Models\Admission::with('student')->findOrFail($admissionId);
+        $student = $admission->student;
+
+        // Security Check: Name must match exactly
+        if (strtoupper(trim($request->confirm_student_name)) !== strtoupper(trim($student->student_name))) {
+            return back()->with('error', "The entered student name does not match. Please type '{$student->student_name}' exactly.");
+        }
+
+        try {
+            $admissionService = app(\App\Services\AdmissionService::class);
+            $admissionService->finalizeAdmission($admissionId, $request->books_status, auth()->id());
+
+            return redirect()->route('books.index')->with('success', "Admission finalized and fee account created for {$student->student_name}.");
+        } catch (Exception $e) {
             return back()->with('error', $e->getMessage());
         }
     }

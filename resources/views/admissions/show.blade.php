@@ -58,7 +58,35 @@
                     </div>
                     <h4 class="fw-bold mb-1">{{ $admission->student->student_name }}</h4>
                     <p class="text-primary fw-semibold mb-3">{{ $admission->student->admission_no }}</p>
-                    <div class="badge rounded-pill bg-success px-3 mb-4">ACTIVE STUDENT</div>
+                    
+                    @php
+                        $statusBadgeClass = match($admission->admission_status) {
+                            'APPROVED' => 'bg-success',
+                            'PENDING' => 'bg-warning text-dark',
+                            'DOCS_UPLOADED' => 'bg-info',
+                            default => 'bg-secondary'
+                        };
+                    @endphp
+                    <div class="badge rounded-pill {{ $statusBadgeClass }} px-3 mb-4">{{ $admission->admission_status }}</div>
+                    
+                    @if($admission->admission_status === 'PENDING')
+                        <div class="d-grid mb-4">
+                            <form action="{{ route('admissions.approve', $admission->admission_id) }}" method="POST">
+                                @csrf
+                                <button type="submit" class="btn btn-success w-100 rounded-pill shadow-sm">
+                                    <i class="bi bi-check-circle me-2"></i> Approve Admission
+                                </button>
+                            </form>
+                        </div>
+                    @endif
+
+                    @if($admission->admission_status === 'APPROVED' && !$feeAccount)
+                        <div class="d-grid mb-4">
+                            <a href="{{ route('books.index') }}?q={{ $admission->student->admission_no }}" class="btn btn-info text-white w-100 rounded-pill shadow-sm">
+                                <i class="bi bi-book me-2"></i> Finalize Books Decision
+                            </a>
+                        </div>
+                    @endif
                     
                     <div class="row g-0 border-top pt-3 mt-2">
                         <div class="col-6 border-end">
@@ -76,30 +104,54 @@
             <!-- Documents Card -->
             <div class="card border-0 shadow-sm rounded-4 mb-4">
                 <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 fw-bold text-dark"><i class="bi bi-file-earmark-text me-2 text-primary"></i> Documents</h6>
+                    <h6 class="m-0 fw-bold text-dark"><i class="bi bi-file-earmark-text me-2 text-primary"></i> Document Management</h6>
                 </div>
                 <div class="card-body p-0">
                     <ul class="list-group list-group-flush">
-                        @forelse($admission->student->documents as $doc)
+                        @php
+                            $requiredDocs = [
+                                'PHOTO' => 'Student Photo',
+                                'BIRTH_CERTIFICATE' => 'Birth Certificate',
+                                'TRANSFER_CERTIFICATE' => 'Transfer Certificate',
+                                'STUDENT_AADHAAR' => 'Student Aadhaar',
+                                'PARENT_AADHAAR' => 'Parent Aadhaar'
+                            ];
+                            $uploadedDocs = $admission->student->documents->pluck('file_path', 'document_type')->toArray();
+                        @endphp
+
+                        @foreach($requiredDocs as $type => $label)
                             <li class="list-group-item d-flex justify-content-between align-items-center py-3">
                                 <div>
-                                    <div class="fw-semibold text-dark">{{ str_replace('_', ' ', $doc->document_type) }}</div>
-                                    <div class="small text-muted">{{ $doc->uploaded_at->format('d M Y') }}</div>
+                                    <div class="fw-semibold text-dark">{{ $label }}</div>
+                                    @if(isset($uploadedDocs[$type]))
+                                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill small">
+                                            <i class="bi bi-check-circle-fill me-1"></i> Uploaded
+                                        </span>
+                                    @else
+                                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill small">
+                                            <i class="bi bi-x-circle-fill me-1"></i> Missing
+                                        </span>
+                                    @endif
                                 </div>
                                 <div class="btn-group">
-                                    <a href="{{ asset('storage/' . $doc->file_path) }}" target="_blank" class="btn btn-light btn-sm rounded-circle border">
-                                        <i class="bi bi-eye"></i>
-                                    </a>
-                                    <a href="{{ asset('storage/' . $doc->file_path) }}" download class="btn btn-light btn-sm rounded-circle border ms-1">
-                                        <i class="bi bi-download"></i>
-                                    </a>
+                                    @if(isset($uploadedDocs[$type]))
+                                        <a href="{{ asset('storage/' . $uploadedDocs[$type]) }}" target="_blank" class="btn btn-light btn-sm rounded-circle border shadow-sm" title="View">
+                                            <i class="bi bi-eye text-primary"></i>
+                                        </a>
+                                        <a href="{{ asset('storage/' . $uploadedDocs[$type]) }}" download class="btn btn-light btn-sm rounded-circle border ms-1 shadow-sm" title="Download">
+                                            <i class="bi bi-download text-success"></i>
+                                        </a>
+                                    @endif
+                                    
+                                    @if(in_array(strtoupper(optional(auth()->user()->role)->role_name ?? ''), ['ADMINISTRATOR', 'ADMIN', 'PRINCIPAL']))
+                                        <button class="btn btn-light btn-sm rounded-circle border ms-1 shadow-sm" 
+                                                onclick="openUploadModal('{{ $type }}', '{{ $label }}')" title="Upload/Replace">
+                                            <i class="bi bi-cloud-upload text-info"></i>
+                                        </button>
+                                    @endif
                                 </div>
                             </li>
-                        @empty
-                            <li class="list-group-item text-center py-4 text-muted">
-                                No documents uploaded.
-                            </li>
-                        @endforelse
+                        @endforeach
                     </ul>
                 </div>
             </div>
@@ -109,8 +161,13 @@
         <div class="col-lg-8">
             <!-- Student Details -->
             <div class="card border-0 shadow-sm rounded-4 mb-4">
-                <div class="card-header bg-white py-3 border-bottom">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                     <h5 class="m-0 fw-bold text-dark"><i class="bi bi-info-circle me-2 text-primary"></i> Personal Information</h5>
+                    @if($admission->transferred_from_admission_id)
+                        <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 rounded-pill small">
+                            <i class="bi bi-arrow-left-right me-1"></i> Transferred From: #{{ $admission->transferredFrom->student->admission_no ?? 'N/A' }}
+                        </span>
+                    @endif
                 </div>
                 <div class="card-body p-4">
                     <div class="row g-4">
@@ -176,6 +233,61 @@
                         <div class="col-md-12">
                             <div class="small text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Address</div>
                             <div class="fw-semibold">{{ $admission->student->address }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Student Timeline -->
+            <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h6 class="m-0 fw-bold text-dark"><i class="bi bi-clock-history me-2 text-primary"></i> Admission Timeline</h6>
+                </div>
+                <div class="card-body p-4 bg-light bg-opacity-50">
+                    <div class="timeline-steps d-flex justify-content-between">
+                        <!-- Created -->
+                        <div class="timeline-step text-center flex-fill">
+                            <div class="step-icon mx-auto rounded-circle bg-white border border-2 border-primary d-flex align-items-center justify-content-center mb-2" style="width: 40px; height: 40px;">
+                                <i class="bi bi-plus-lg text-primary"></i>
+                            </div>
+                            <div class="small fw-bold">Draft</div>
+                            <div class="x-small text-muted">{{ $admission->created_at->format('d/m/y') }}</div>
+                        </div>
+
+                        <!-- Submitted -->
+                        <div class="timeline-step text-center flex-fill">
+                            <div class="step-icon mx-auto rounded-circle bg-white border border-2 {{ $admission->admission_status !== 'DRAFT' ? 'border-primary' : 'text-muted' }} d-flex align-items-center justify-content-center mb-2" style="width: 40px; height: 40px;">
+                                <i class="bi bi-file-earmark-arrow-up {{ $admission->admission_status !== 'DRAFT' ? 'text-primary' : '' }}"></i>
+                            </div>
+                            <div class="small fw-bold {{ $admission->admission_status === 'DRAFT' ? 'text-muted' : '' }}">Submitted</div>
+                            <div class="x-small text-muted">{{ $admission->created_at->format('d/m/y') }}</div>
+                        </div>
+
+                        <!-- Verified -->
+                        <div class="timeline-step text-center flex-fill">
+                            <div class="step-icon mx-auto rounded-circle bg-white border border-2 {{ $admission->verified_at ? 'border-primary' : 'text-muted' }} d-flex align-items-center justify-content-center mb-2" style="width: 40px; height: 40px;">
+                                <i class="bi bi-shield-check {{ $admission->verified_at ? 'text-primary' : '' }}"></i>
+                            </div>
+                            <div class="small fw-bold {{ !$admission->verified_at ? 'text-muted' : '' }}">Verified</div>
+                            <div class="x-small text-muted">{{ $admission->verified_at ? $admission->verified_at->format('d/m/y') : '-' }}</div>
+                        </div>
+
+                        <!-- Approved -->
+                        <div class="timeline-step text-center flex-fill">
+                            <div class="step-icon mx-auto rounded-circle bg-white border border-2 {{ $admission->approved_at ? 'border-primary' : 'text-muted' }} d-flex align-items-center justify-content-center mb-2" style="width: 40px; height: 40px;">
+                                <i class="bi bi-check-lg {{ $admission->approved_at ? 'text-primary' : '' }}"></i>
+                            </div>
+                            <div class="small fw-bold {{ !$admission->approved_at ? 'text-muted' : '' }}">Approved</div>
+                            <div class="x-small text-muted">{{ $admission->approved_at ? $admission->approved_at->format('d/m/y') : '-' }}</div>
+                        </div>
+
+                        <!-- Admitted -->
+                        <div class="timeline-step text-center flex-fill">
+                            <div class="step-icon mx-auto rounded-circle bg-white border border-2 {{ $admission->admitted_at ? 'border-primary' : 'text-muted' }} d-flex align-items-center justify-content-center mb-2" style="width: 40px; height: 40px;">
+                                <i class="bi bi-person-check {{ $admission->admitted_at ? 'text-primary' : '' }}"></i>
+                            </div>
+                            <div class="small fw-bold {{ !$admission->admitted_at ? 'text-muted' : '' }}">Admitted</div>
+                            <div class="x-small text-muted">{{ $admission->admitted_at ? $admission->admitted_at->format('d/m/y') : '-' }}</div>
                         </div>
                     </div>
                 </div>
@@ -290,4 +402,45 @@
     }
 </script>
 @endpush
+
+<!-- Upload Document Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-primary text-white py-3">
+                <h6 class="modal-title fw-bold"><i class="bi bi-cloud-upload me-2"></i> Upload Document</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ route('admissions.documents.store', $admission->admission_id) }}" method="POST" enctype="multipart/form-data">
+                @csrf
+                <input type="hidden" name="document_type" id="modal_doc_type">
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Document Type</label>
+                        <input type="text" id="modal_doc_label" class="form-control bg-light border-0" readonly>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Select File <span class="text-danger">*</span></label>
+                        <input type="file" name="document" class="form-control border-primary" required accept=".jpg,.jpeg,.png,.pdf">
+                        <div class="form-text small">Accepted formats: JPG, PNG, PDF (Max 2MB)</div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0 py-3">
+                    <button type="button" class="btn btn-link text-muted text-decoration-none px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary px-4 fw-bold rounded-pill shadow-sm">
+                        <i class="bi bi-check-lg me-2"></i> Start Upload
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openUploadModal(type, label) {
+        document.getElementById('modal_doc_type').value = type;
+        document.getElementById('modal_doc_label').value = label;
+        new bootstrap.Modal(document.getElementById('uploadModal')).show();
+    }
+</script>
 @endsection

@@ -24,6 +24,18 @@ class Student extends Model
         'phone_secondary',
         'email',
         'address',
+        'permanent_address',
+        'village',
+        'district',
+        'state',
+        'pin_code',
+        'religion',
+        'category',
+        'blood_group',
+        'occupation',
+        'annual_income',
+        'previous_school',
+        'previous_class',
         'admission_date',
         'status',
         'photo_path',
@@ -41,7 +53,35 @@ class Student extends Model
         return $this->hasMany(StudentDocument::class, 'student_id', 'student_id');
     }
 
-    public function enrollments()
+    /**
+     * Masked Aadhaar Number (XXXX XXXX 1234)
+     */
+    public function getMaskedAadhaarAttribute()
+    {
+        if (!$this->aadhaar_no) return 'N/A';
+        $clean = str_replace([' ', '-'], '', $this->aadhaar_no);
+        if (strlen($clean) < 4) return $this->aadhaar_no;
+        return 'XXXX XXXX ' . substr($clean, -4);
+    }
+
+    /**
+     * Masked PEN Number (******7890)
+     */
+    public function getMaskedPenAttribute()
+    {
+        if (!$this->pen_no) return 'N/A';
+        $clean = trim($this->pen_no);
+        if (strlen($clean) < 4) return $this->pen_no;
+        return '******' . substr($clean, -4);
+    }
+
+    public function canViewSensitiveData(): bool
+    {
+        $role = strtoupper(optional(auth()->user()?->role)->role_name ?? '');
+        return in_array($role, ['ADMIN', 'ADMINISTRATOR', 'PRINCIPAL', 'CORRESPONDENT']);
+    }
+
+    public function enrollments(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(StudentEnrollment::class, 'student_id', 'student_id');
     }
@@ -73,34 +113,5 @@ class Student extends Model
             ->whereRaw('UPPER(document_type) = ?', ['PHOTO'])
             ->orderByDesc('uploaded_at')
             ->first();
-    }
-
-    // ==========================
-    // Sensitive Data Masking
-    // ==========================
-
-    public function getMaskedAadhaarAttribute(): string
-    {
-        if (empty($this->aadhaar_no)) return '';
-        $val = str_replace([' ', '-'], '', $this->aadhaar_no);
-        if (strlen($val) <= 4) return $val;
-        return str_repeat('*', strlen($val) - 4) . substr($val, -4);
-    }
-
-    public function getMaskedPenAttribute(): string
-    {
-        if (empty($this->pen_no)) return '';
-        $val = $this->pen_no;
-        if (strlen($val) <= 4) return $val;
-        return str_repeat('*', strlen($val) - 4) . substr($val, -4);
-    }
-
-    /**
-     * Check if current user can view full sensitive data
-     */
-    public function canViewSensitiveData(): bool
-    {
-        $role = strtoupper(optional(auth()->user()?->role)->role_name ?? '');
-        return in_array($role, ['ADMIN', 'ADMINISTRATOR', 'PRINCIPAL', 'CORRESPONDENT']);
     }
 }
