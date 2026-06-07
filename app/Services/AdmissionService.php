@@ -67,12 +67,13 @@ class AdmissionService
             ]);
 
             // 4. Create Admission Record (Status: PENDING)
+            $admissionStatus = $data['admission_status'] ?? Admission::STATUS_SUBMITTED;
             $admission = Admission::create([
                 'student_id' => $student->student_id,
                 'academic_year_id' => $data['academic_year_id'],
                 'class_id' => $data['class_id'],
                 'section_id' => $data['section_id'],
-                'admission_status' => 'PENDING',
+                'admission_status' => $admissionStatus,
                 'remarks' => $data['remarks'] ?? null,
                 'created_by' => $userId,
             ]);
