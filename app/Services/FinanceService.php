@@ -34,14 +34,43 @@ class FinanceService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $remaining = $feeAccount->remaining_balance;
+            // Fetch previous years' outstanding fee accounts
+            $studentId = $feeAccount->enrollment->student_id;
+            $currentAY = $feeAccount->enrollment->academicYear;
+            
+            $prevAccounts = StudentFeeAccount::whereHas('enrollment', function($q) use ($studentId) {
+                    $q->where('student_id', $studentId);
+                })
+                ->where('account_id', '!=', $feeAccount->account_id)
+                ->whereIn('status', ['UNPAID', 'PARTIALLY_PAID'])
+                ->get()
+                ->filter(function($acc) use ($currentAY) {
+                    $ay = $acc->enrollment->academicYear;
+                    return $ay && $ay->start_date < $currentAY->start_date;
+                })
+                ->sortBy(function($acc) {
+                    return $acc->enrollment->academicYear->start_date;
+                });
+
+            $prevAccountsDue = 0.00;
+            foreach ($prevAccounts as $pa) {
+                $prevAccountsDue += $pa->remaining_balance;
+            }
+
+            $currentAccountPrevPaid = (float) $feeAccount->payments()
+                ->where('status', 'SUCCESS')
+                ->sum('previous_fee_paid');
+            $currentAccountPrevRemaining = max(0.00, (float)$feeAccount->previous_balance - $currentAccountPrevPaid);
+
+            $prevRemaining = $prevAccountsDue + $currentAccountPrevRemaining;
+            $totalOutstanding = $feeAccount->remaining_balance + $prevAccountsDue;
 
             if ($amount <= 0) {
                 throw new InvalidArgumentException("Payment amount must be greater than zero.");
             }
 
-            if ($amount > $remaining) {
-                throw new InvalidArgumentException("Excessive payment attempted. Outstanding balance is ₹" . number_format($remaining, 2));
+            if ($amount > $totalOutstanding) {
+                throw new InvalidArgumentException("Excessive payment attempted. Outstanding balance is ₹" . number_format($totalOutstanding, 2));
             }
 
             // --- DUPLICATE PAYMENT PROTECTION ---
@@ -67,47 +96,108 @@ class FinanceService
             }
 
             // 2. Create the Payment Record
-            // Calculate Books vs Tuition allocation
-            $booksDue = 0;
+            $allocation = $data['allocation'] ?? 'TUITION';
+            $overpaymentAllocation = $data['overpayment_allocation'] ?? 'TUITION';
+
+            $booksRemaining = $feeAccount->remaining_books_balance;
+            $tuitionRemaining = $feeAccount->remaining_tuition_balance;
+
             $booksPaid = 0.00;
             $tuitionPaid = 0.00;
+            $previousPaid = 0.00;
 
-            if ($feeAccount->books_status === 'SCHOOL') {
-                $totalBooksAlreadyPaid = (float) $feeAccount->payments()
-                    ->where('status', 'SUCCESS')
-                    ->sum('books_fee_paid');
-                
-                $booksRemaining = max(0, (float) $feeAccount->books_fee_applied - $totalBooksAlreadyPaid);
-
+            // Phase 1: Allocate according to clerk's primary choice
+            if ($allocation === 'BOOKS') {
                 if ($amount <= $booksRemaining) {
                     $booksPaid = $amount;
-                    $tuitionPaid = 0.00;
                 } else {
                     $booksPaid = $booksRemaining;
-                    $tuitionPaid = $amount - $booksRemaining;
+                    $remainder = $amount - $booksRemaining;
+                    // Allocate overpayment remainder
+                    if ($overpaymentAllocation === 'PREVIOUS') {
+                        if ($remainder <= $prevRemaining) {
+                            $previousPaid = $remainder;
+                        } else {
+                            $previousPaid = $prevRemaining;
+                            $tuitionPaid = $remainder - $prevRemaining;
+                        }
+                    } else { // default to TUITION
+                        if ($remainder <= $tuitionRemaining) {
+                            $tuitionPaid = $remainder;
+                        } else {
+                            $tuitionPaid = $tuitionRemaining;
+                            $previousPaid = $remainder - $tuitionRemaining;
+                        }
+                    }
                 }
-            } else {
-                // If BOOKS_PAID or OUTSIDE or PENDING, all goes to tuition
-                // STRICT PROTECTION: Ensure booksPaid is ALWAYS 0 for OUTSIDE
-                $booksPaid = 0.00;
-                $tuitionPaid = $amount;
+            } elseif ($allocation === 'PREVIOUS') {
+                if ($amount <= $prevRemaining) {
+                    $previousPaid = $amount;
+                } else {
+                    $previousPaid = $prevRemaining;
+                    $remainder = $amount - $prevRemaining;
+                    // Allocate overpayment remainder
+                    if ($overpaymentAllocation === 'BOOKS') {
+                        if ($remainder <= $booksRemaining) {
+                            $booksPaid = $remainder;
+                        } else {
+                            $booksPaid = $booksRemaining;
+                            $tuitionPaid = $remainder - $booksRemaining;
+                        }
+                    } else { // default to TUITION
+                        if ($remainder <= $tuitionRemaining) {
+                            $tuitionPaid = $remainder;
+                        } else {
+                            $tuitionPaid = $tuitionRemaining;
+                            $booksPaid = $remainder - $tuitionRemaining;
+                        }
+                    }
+                }
+            } else { // TUITION
+                if ($amount <= $tuitionRemaining) {
+                    $tuitionPaid = $amount;
+                } else {
+                    $tuitionPaid = $tuitionRemaining;
+                    $remainder = $amount - $tuitionRemaining;
+                    // Allocate overpayment remainder
+                    if ($overpaymentAllocation === 'PREVIOUS') {
+                        if ($remainder <= $prevRemaining) {
+                            $previousPaid = $remainder;
+                        } else {
+                            $previousPaid = $prevRemaining;
+                            $booksPaid = $remainder - $prevRemaining;
+                        }
+                    } else { // default to BOOKS
+                        if ($remainder <= $booksRemaining) {
+                            $booksPaid = $remainder;
+                        } else {
+                            $booksPaid = $booksRemaining;
+                            $previousPaid = $remainder - $booksRemaining;
+                        }
+                    }
+                }
             }
 
-            $feeComponentType = 'TUITION';
-            if ($booksPaid > 0 && $tuitionPaid > 0) {
-                $feeComponentType = 'MIXED';
-            } elseif ($booksPaid > 0) {
-                $feeComponentType = 'BOOKS';
-            }
-
-            // Re-verify protection for OUTSIDE status
+            // STRICT PROTECTION: Ensure booksPaid is ALWAYS 0 for OUTSIDE or if books purchased outside
             if ($feeAccount->booksPurchasedOutside()) {
+                $tuitionPaid += $booksPaid;
                 $booksPaid = 0.00;
-                $tuitionPaid = $amount;
-                $feeComponentType = 'TUITION';
             }
 
-            // Check if books are now fully paid
+            // Set fee component type
+            $feeComponentType = 'TUITION';
+            $activeComponents = [];
+            if ($booksPaid > 0) $activeComponents[] = 'BOOKS';
+            if ($tuitionPaid > 0) $activeComponents[] = 'TUITION';
+            if ($previousPaid > 0) $activeComponents[] = 'PREVIOUS';
+
+            if (count($activeComponents) > 1) {
+                $feeComponentType = 'MIXED';
+            } elseif (count($activeComponents) === 1) {
+                $feeComponentType = $activeComponents[0];
+            }
+
+            // Verify if books are now fully paid for current year
             if ($feeAccount->books_status === 'SCHOOL') {
                 $totalBooksPaidAfter = (float) $feeAccount->payments()
                     ->where('status', 'SUCCESS')
@@ -124,12 +214,45 @@ class FinanceService
                 'amount' => $amount,
                 'books_fee_paid' => $booksPaid,
                 'tuition_fee_paid' => $tuitionPaid,
+                'previous_fee_paid' => $previousPaid,
                 'payment_mode' => $data['payment_mode'],
                 'transaction_reference' => $data['transaction_reference'] ?? null,
                 'payment_date' => now(),
                 'collected_by' => $clerkId,
                 'status' => 'SUCCESS',
             ]);
+
+            // If we have previous year payments, split them among outstanding previous accounts
+            if ($previousPaid > 0) {
+                $tempPrevPaid = $previousPaid;
+                foreach ($prevAccounts as $pa) {
+                    if ($tempPrevPaid <= 0) break;
+                    $paRemaining = $pa->remaining_balance;
+                    if ($paRemaining <= 0) continue;
+
+                    $splitAmount = min($tempPrevPaid, $paRemaining);
+                    $tempPrevPaid -= $splitAmount;
+
+                    Payment::create([
+                        'account_id' => $pa->account_id,
+                        'fee_component_type' => 'TUITION',
+                        'amount' => $splitAmount,
+                        'books_fee_paid' => 0,
+                        'tuition_fee_paid' => $splitAmount,
+                        'previous_fee_paid' => 0,
+                        'payment_mode' => $data['payment_mode'],
+                        'transaction_reference' => $data['transaction_reference'] ?? null,
+                        'payment_date' => now(),
+                        'collected_by' => $clerkId,
+                        'status' => 'SUCCESS',
+                        'remarks' => "Split payment from Receipt of Main Payment ID: {$payment->payment_id}",
+                        'receipt_generated' => false,
+                    ]);
+
+                    $pa->recalculateTotals();
+                    $pa->save();
+                }
+            }
 
             // 3. Recalculate State
             $feeAccount->recalculateTotals();
@@ -196,6 +319,22 @@ class FinanceService
             $payment->update([
                 'status' => 'CANCELLED',
             ]);
+
+            // If this is a main payment with previous_fee_paid > 0, cancel any secondary split payments
+            if ((float)$payment->previous_fee_paid > 0) {
+                $secondaryPayments = Payment::where('remarks', "Split payment from Receipt of Main Payment ID: {$payment->payment_id}")
+                    ->where('status', '!=', 'CANCELLED')
+                    ->get();
+                
+                foreach ($secondaryPayments as $sp) {
+                    $sp->update([
+                        'status' => 'CANCELLED',
+                    ]);
+                    $spAccount = StudentFeeAccount::findOrFail($sp->account_id);
+                    $spAccount->recalculateTotals();
+                    $spAccount->save();
+                }
+            }
 
             // Recalculate account status after cancellation
             $feeAccount->recalculateTotals();

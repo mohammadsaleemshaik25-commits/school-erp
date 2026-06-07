@@ -11,11 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (!Schema::hasColumn('students', 'photo_path')) {
-            Schema::table('students', function (Blueprint $table) {
-                $table->string('photo_path', 255)->nullable()->after('status');
-            });
-        }
+        Schema::table('payments', function (Blueprint $table) {
+            $table->decimal('previous_fee_paid', 10, 2)->default(0)->after('tuition_fee_paid');
+        });
     }
 
     /**
@@ -23,8 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('students', function (Blueprint $table) {
-            $table->dropColumn('photo_path');
+        Schema::table('payments', function (Blueprint $table) {
+            $table->dropColumn('previous_fee_paid');
         });
     }
 };

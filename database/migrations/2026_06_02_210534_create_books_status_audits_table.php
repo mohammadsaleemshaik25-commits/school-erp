@@ -11,18 +11,20 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('books_status_audits', function (Blueprint $table) {
-            $table->bigIncrements('audit_id');
-            $table->bigInteger('account_id')->unsigned();
-            $table->bigInteger('user_id')->unsigned();
-            $table->string('old_status', 20);
-            $table->string('new_status', 20);
-            $table->text('reason');
-            $table->timestamp('created_at')->useCurrent();
+        if (!Schema::hasTable('books_status_audits')) {
+            Schema::create('books_status_audits', function (Blueprint $table) {
+                $table->bigIncrements('audit_id');
+                $table->bigInteger('account_id')->unsigned();
+                $table->bigInteger('user_id')->unsigned();
+                $table->string('old_status', 20);
+                $table->string('new_status', 20);
+                $table->text('reason');
+                $table->timestamp('created_at')->useCurrent();
 
-            $table->foreign('account_id')->references('account_id')->on('student_fee_accounts');
-            $table->foreign('user_id')->references('user_id')->on('users');
-        });
+                $table->foreign('account_id')->references('account_id')->on('student_fee_accounts');
+                $table->foreign('user_id')->references('user_id')->on('users');
+            });
+        }
     }
 
     /**

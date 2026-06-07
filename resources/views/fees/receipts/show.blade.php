@@ -45,6 +45,7 @@
             <div class="col-sm-6 text-sm-end">
               <div><strong>Date:</strong> {{ \Carbon\Carbon::parse($receipt->payment?->payment_date)->format('d-m-Y') }}</div>
                 <div><strong>Academic Year:</strong> {{ $receipt->payment?->feeAccount?->academicYear?->year_name ?? '-' }}</div>
+              <div><strong>Class:</strong> {{ $receipt->payment?->feeAccount?->classRoom?->class_name ?? '-' }} {{ $receipt->payment?->feeAccount?->section?->section_name ?? '' }}</div>
               <div><strong>Collector:</strong> {{ $receipt->payment?->collector?->full_name ?? $receipt->payment?->collector?->username ?? '-' }}</div>
               </div>
             </div>
@@ -52,15 +53,48 @@
             <div class="table-responsive mb-3">
                 <table class="table table-borderless table-sm">
                     <thead>
-                        <tr class="text-muted"><th>Description</th><th class="text-end">Amount (INR)</th></tr>
+                        <tr class="text-muted"><th>Payment Category</th><th class="text-end">Amount (INR)</th></tr>
                     </thead>
                     <tbody>
-                        <tr><td>Books Fee Paid</td><td class="text-end">{{ number_format((float) ($receipt->payment?->books_fee_paid ?? 0), 2) }}</td></tr>
-                        <tr><td>Tuition Fee Paid</td><td class="text-end">{{ number_format((float) ($receipt->payment?->tuition_fee_paid ?? 0), 2) }}</td></tr>
+                        @if($receipt->payment?->previous_fee_paid > 0)
+                        <tr><td>Previous Fee</td><td class="text-end">{{ number_format((float) ($receipt->payment?->previous_fee_paid ?? 0), 2) }}</td></tr>
+                        @endif
+                        @if($receipt->payment?->tuition_fee_paid > 0)
+                        <tr><td>Current Tuition Fee</td><td class="text-end">{{ number_format((float) ($receipt->payment?->tuition_fee_paid ?? 0), 2) }}</td></tr>
+                        @endif
+                        @if($receipt->payment?->books_fee_paid > 0)
+                        <tr><td>Books Fee</td><td class="text-end">{{ number_format((float) ($receipt->payment?->books_fee_paid ?? 0), 2) }}</td></tr>
+                        @endif
                         <tr class="border-top"><td class="fw-semibold">Total Paid</td><td class="text-end fw-semibold">{{ number_format((float) ($receipt->payment?->amount ?? 0), 2) }}</td></tr>
                     </tbody>
                 </table>
             </div>
+
+            {{-- Academic Year Completion Status --}}
+            @php
+                $feeAccount = $receipt->payment?->feeAccount;
+                $tuitionRemaining = $feeAccount ? $feeAccount->remaining_tuition_balance : 0;
+                $booksRemaining = $feeAccount ? $feeAccount->remaining_books_balance : 0;
+                $tuitionCompleted = $tuitionRemaining <= 0 && $feeAccount && $feeAccount->final_tuition_fee > 0;
+                $booksCompleted = $booksRemaining <= 0 && $feeAccount && $feeAccount->books_fee_applied > 0;
+            @endphp
+            @if($tuitionCompleted || $booksCompleted)
+            <div class="alert alert-success mb-3">
+                @if($tuitionCompleted)
+                <div class="fw-bold text-center">ACADEMIC YEAR FEE COMPLETED</div>
+                <div class="small text-center">Academic Year: {{ $feeAccount?->academicYear?->year_name ?? '-' }}</div>
+                <div class="small text-center">Class: {{ $feeAccount?->classRoom?->class_name ?? '-' }}</div>
+                <div class="small text-center">All Tuition Fees Cleared Successfully.</div>
+                @endif
+                @if($booksCompleted)
+                @if($tuitionCompleted)<hr class="my-2">@endif
+                <div class="fw-bold text-center">BOOKS FEE COMPLETED</div>
+                <div class="small text-center">Academic Year: {{ $feeAccount?->academicYear?->year_name ?? '-' }}</div>
+                <div class="small text-center">Class: {{ $feeAccount?->classRoom?->class_name ?? '-' }}</div>
+                <div class="small text-center">Books Purchased Through School - Completed.</div>
+                @endif
+            </div>
+            @endif
 
             <div class="row mb-3 small text-muted">
                 <div class="col-sm-6">Remaining Balance: {{ number_format((float) ($receipt->payment?->feeAccount?->remaining_balance ?? 0), 2) }}</div>

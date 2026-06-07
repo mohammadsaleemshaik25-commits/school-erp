@@ -19,6 +19,7 @@ class Payment extends Model
         'amount',
         'books_fee_paid',
         'tuition_fee_paid',
+        'previous_fee_paid',
         'payment_mode',
         'transaction_reference',
         'payment_date',
@@ -31,6 +32,7 @@ class Payment extends Model
         'amount' => 'decimal:2',
         'books_fee_paid' => 'decimal:2',
         'tuition_fee_paid' => 'decimal:2',
+        'previous_fee_paid' => 'decimal:2',
         'payment_date' => 'datetime',
         'receipt_generated' => 'boolean',
     ];

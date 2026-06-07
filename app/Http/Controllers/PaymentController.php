@@ -33,10 +33,28 @@ class PaymentController extends Controller
         $classes = ClassRoom::all();
         $sections = Section::all();
 
+        $previousAccounts = collect();
+        $allAccounts = collect();
         // Scenario: Clerk selected a student and loaded their checkout ledger
         if ($request->filled('account_id')) {
             $account = StudentFeeAccount::with(['enrollment.student', 'enrollment.academicYear', 'enrollment.classRoom', 'enrollment.section'])
                 ->findOrFail($request->get('account_id'));
+
+            $studentId = $account->enrollment->student_id;
+            $currentAY = $account->enrollment->academicYear;
+            
+            $allAccounts = StudentFeeAccount::whereHas('enrollment', function($q) use ($studentId) {
+                    $q->where('student_id', $studentId);
+                })
+                ->with(['enrollment.student', 'enrollment.academicYear', 'enrollment.classRoom', 'enrollment.section'])
+                ->get();
+                
+            $previousAccounts = $allAccounts->filter(function($acc) use ($currentAY) {
+                $ay = $acc->enrollment->academicYear;
+                return $ay && $ay->start_date < $currentAY->start_date;
+            })->sortBy(function($acc) {
+                return $acc->enrollment->academicYear->start_date;
+            });
         } 
 
         // Dashboard stats for fee collection page
@@ -67,7 +85,9 @@ class PaymentController extends Controller
             'todayCollection',
             'clerkReceipts',
             'cancelledReceipts',
-            'totalPending'
+            'totalPending',
+            'previousAccounts',
+            'allAccounts'
         ));
     }
 
@@ -289,5 +309,71 @@ class PaymentController extends Controller
                 ];
             })
         );
+    }
+
+    public function closePreviousFee(Request $request, StudentFeeAccount $account)
+    {
+        $userRole = strtoupper(optional(auth()->user()->role)->role_name ?? '');
+        if (!in_array($userRole, ['ADMIN', 'ADMINISTRATOR', 'PRINCIPAL', 'CORRESPONDENT'])) {
+            return redirect()->back()->with('error', 'Unauthorized action. Only Admin, Principal, and Correspondent can close previous fees.');
+        }
+
+        $request->validate([
+            'reason' => 'required|string|min:5|max:255'
+        ]);
+
+        $account->status = 'CLOSED';
+        $account->closed_at = now();
+        $account->save();
+
+        \App\Models\AuditLog::create([
+            'user_id' => auth()->id(),
+            'action' => 'PREVIOUS_FEE_CLOSED',
+            'table_name' => 'student_fee_accounts',
+            'record_id' => $account->account_id,
+            'new_value' => json_encode([
+                'reason' => $request->input('reason'),
+                'user' => auth()->user()->full_name ?? auth()->user()->username,
+                'date' => now()->toDateTimeString(),
+            ]),
+            'ip_address' => $request->ip()
+        ]);
+
+        return redirect()->back()->with('success', 'Previous academic year fee closed successfully.');
+    }
+
+    public function waivePreviousFee(Request $request, StudentFeeAccount $account)
+    {
+        $userRole = strtoupper(optional(auth()->user()->role)->role_name ?? '');
+        if (!in_array($userRole, ['ADMIN', 'ADMINISTRATOR', 'PRINCIPAL', 'CORRESPONDENT'])) {
+            return redirect()->back()->with('error', 'Unauthorized action. Only Admin, Principal, and Correspondent can waive previous fees.');
+        }
+
+        $request->validate([
+            'reason' => 'required|string|min:5|max:255'
+        ]);
+
+        $remaining = $account->remaining_balance;
+        $account->waived_amount = (float) $account->waived_amount + $remaining;
+        $account->waived_by = auth()->id();
+        $account->waived_date = now();
+        $account->recalculateTotals();
+        $account->save();
+
+        \App\Models\AuditLog::create([
+            'user_id' => auth()->id(),
+            'action' => 'PREVIOUS_FEE_WAIVED',
+            'table_name' => 'student_fee_accounts',
+            'record_id' => $account->account_id,
+            'new_value' => json_encode([
+                'reason' => $request->input('reason'),
+                'amount_waived' => $remaining,
+                'user' => auth()->user()->full_name ?? auth()->user()->username,
+                'date' => now()->toDateTimeString(),
+            ]),
+            'ip_address' => $request->ip()
+        ]);
+
+        return redirect()->back()->with('success', 'Previous academic year fee waived successfully.');
     }
 }

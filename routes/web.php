@@ -45,6 +45,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/fees/finder', [PaymentController::class, 'finder'])->name('fees.finder');
         Route::get('/fees/collect', [PaymentController::class, 'create'])->name('fees.collect');
         Route::post('/fees/collect', [PaymentController::class, 'store'])->name('fees.payments.store');
+        Route::post('/fees/previous-fee/{account}/close', [PaymentController::class, 'closePreviousFee'])->name('fees.previous.close');
+        Route::post('/fees/previous-fee/{account}/waive', [PaymentController::class, 'waivePreviousFee'])->name('fees.previous.waive');
         Route::get('/fees/ledger/{account}', [PaymentController::class, 'ledger'])->name('fees.ledger');
 
         Route::get('/receipts', [ReceiptController::class, 'index'])->name('fees.receipts.index');

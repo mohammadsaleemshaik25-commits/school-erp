@@ -22,6 +22,8 @@ class CollectPaymentRequest extends FormRequest
             'payment_mode'           => 'required|string|in:CASH,UPI',
             'transaction_reference'  => 'nullable|string|max:100|required_if:payment_mode,UPI',
             'books_purchased'        => 'nullable|string|in:yes,no',
+            'allocation'             => 'nullable|string|in:BOOKS,TUITION,PREVIOUS',
+            'overpayment_allocation' => 'nullable|string|in:BOOKS,TUITION,PREVIOUS',
         ];
     }
 

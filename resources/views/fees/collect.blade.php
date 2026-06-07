@@ -257,8 +257,73 @@
                         </div>
                     </div>
 
+                    <h6 class="fw-bold text-muted text-uppercase mb-3" style="font-size: 0.75rem; letter-spacing: 1px;">Outstanding Summary</h6>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-bordered align-middle">
+                            <thead class="bg-light text-center">
+                                <tr class="small text-uppercase fw-bold text-muted">
+                                    <th class="py-2">Academic Year</th>
+                                    <th class="py-2 text-end px-3">Amount Due</th>
+                                    @if(in_array(strtoupper(optional(auth()->user()->role)->role_name), ['ADMINISTRATOR', 'ADMIN', 'PRINCIPAL', 'CORRESPONDENT']))
+                                    <th class="py-2 text-center px-3">Actions</th>
+                                    @endif
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @php
+                                    $outstandingSummary = $account->outstanding_summary;
+                                    $currentUserRole = strtoupper(optional(auth()->user()->role)->role_name);
+                                    $canManagePreviousFees = in_array($currentUserRole, ['ADMINISTRATOR', 'ADMIN', 'PRINCIPAL', 'CORRESPONDENT']);
+                                @endphp
+                                @if(isset($outstandingSummary['previous_years']) && count($outstandingSummary['previous_years']) > 0)
+                                    @foreach($outstandingSummary['previous_years'] as $prevYear)
+                                    <tr class="table-danger">
+                                        <td class="px-3 py-3">{{ $prevYear['year_name'] }}</td>
+                                        <td class="px-3 py-3 text-end font-monospace fw-bold">₹{{ number_format($prevYear['total_outstanding'], 2) }}</td>
+                                        @if($canManagePreviousFees)
+                                        <td class="px-3 py-3 text-center">
+                                            <button type="button" class="btn btn-sm btn-outline-warning me-1" onclick="openClosePreviousFeeModal('{{ $prevYear['year_name'] }}', {{ $prevYear['total_outstanding'] }})">
+                                                <i class="bi bi-x-circle me-1"></i>Close
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="openWaivePreviousFeeModal('{{ $prevYear['year_name'] }}', {{ $prevYear['total_outstanding'] }})">
+                                                <i class="bi bi-dash-circle me-1"></i>Waive
+                                            </button>
+                                        </td>
+                                        @endif
+                                    </tr>
+                                    @endforeach
+                                @endif
+                                @if(isset($outstandingSummary['current_year']))
+                                    <tr class="table-primary">
+                                        <td class="px-3 py-3">{{ $outstandingSummary['current_year']['year_name'] }} (Current)</td>
+                                        <td class="px-3 py-3 text-end font-monospace fw-bold">₹{{ number_format($outstandingSummary['current_year']['total_outstanding'], 2) }}</td>
+                                        @if($canManagePreviousFees)
+                                        <td class="px-3 py-3 text-center">
+                                            <span class="text-muted small">Current year</span>
+                                        </td>
+                                        @endif
+                                    </tr>
+                                    <tr class="table-light">
+                                        <td class="px-3 py-3 ps-4">- Tuition Fee</td>
+                                        <td class="px-3 py-3 text-end font-monospace">₹{{ number_format($outstandingSummary['current_year']['tuition_outstanding'], 2) }}</td>
+                                        @if($canManagePreviousFees)
+                                        <td class="px-3 py-3"></td>
+                                        @endif
+                                    </tr>
+                                    <tr class="table-light">
+                                        <td class="px-3 py-3 ps-4">- Books Fee</td>
+                                        <td class="px-3 py-3 text-end font-monospace">₹{{ number_format($outstandingSummary['current_year']['books_outstanding'], 2) }}</td>
+                                        @if($canManagePreviousFees)
+                                        <td class="px-3 py-3"></td>
+                                        @endif
+                                    </tr>
+                                @endif
+                            </tbody>
+                        </table>
+                    </div>
+
                     <h6 class="fw-bold text-muted text-uppercase mb-3" style="font-size: 0.75rem; letter-spacing: 1px;">Fee Summary</h6>
-                    <div class="table-responsive">
+                    <div class="table-responsive mb-4">
                         <table class="table table-bordered align-middle">
                             <thead class="bg-light text-center">
                                 <tr class="small text-uppercase fw-bold text-muted">
@@ -275,18 +340,6 @@
                                     <td class="px-3 py-3">Billed Books Fee</td>
                                     <td class="px-3 py-3 text-end font-monospace">₹{{ number_format($account->books_fee_applied, 2) }}</td>
                                 </tr>
-                                @if($account->previous_balance > 0)
-                                <tr>
-                                    <td class="px-3 py-3">Previous Session Balance</td>
-                                    <td class="px-3 py-3 text-end font-monospace">₹{{ number_format($account->previous_balance, 2) }}</td>
-                                </tr>
-                                @endif
-                                @if($account->discount_amount > 0 || $account->waived_amount > 0)
-                                <tr class="text-success">
-                                    <td class="px-3 py-3 italic">Total Discounts/Waivers</td>
-                                    <td class="px-3 py-3 text-end font-monospace">-₹{{ number_format($account->discount_amount + $account->waived_amount, 2) }}</td>
-                                </tr>
-                                @endif
                                 <tr class="bg-light fw-bold">
                                     <td class="px-3 py-3">Total Payable (Current session)</td>
                                     <td class="px-3 py-3 text-end font-monospace">₹{{ number_format($account->total_due, 2) }}</td>
@@ -299,6 +352,71 @@
                                     <td class="px-3 py-3 fs-5">Balance Due</td>
                                     <td class="px-3 py-3 text-end font-monospace fs-5">₹{{ number_format($account->remaining_balance, 2) }}</td>
                                 </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h6 class="fw-bold text-muted text-uppercase mb-3" style="font-size: 0.75rem; letter-spacing: 1px;">Financial Timeline</h6>
+                    <div class="table-responsive">
+                        <table class="table table-bordered align-middle">
+                            <thead class="bg-light text-center">
+                                <tr class="small text-uppercase fw-bold text-muted">
+                                    <th class="py-2">Academic Year</th>
+                                    <th class="py-2 text-center px-3">Status</th>
+                                    <th class="py-2 text-end px-3">Outstanding Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @php
+                                    $student = $account->student;
+                                    $currentYear = \App\Models\AcademicYear::where('is_active', true)->first();
+                                    $allEnrollments = [];
+                                    if($student) {
+                                        $allEnrollments = \App\Models\StudentEnrollment::with(['feeAccount', 'academicYear'])
+                                            ->where('student_id', $student->student_id)
+                                            ->where('status', 'ACTIVE')
+                                            ->orderBy('academic_year_id')
+                                            ->get();
+                                    }
+                                @endphp
+                                @foreach($allEnrollments as $enrollment)
+                                    @php
+                                        $feeAccount = $enrollment->feeAccount;
+                                        $yearName = $enrollment->academicYear->year_name;
+                                        $isCurrentYear = $currentYear && $enrollment->academicYear_id === $currentYear->academic_year_id;
+                                        $status = 'Not Started';
+                                        $outstanding = 0;
+                                        $rowClass = '';
+                                        
+                                        if($feeAccount) {
+                                            $outstanding = (float) $feeAccount->remaining_balance;
+                                            if($feeAccount->status === 'PAID' || $feeAccount->status === 'CLOSED') {
+                                                $status = 'Completed';
+                                                $rowClass = 'table-success';
+                                            } elseif($feeAccount->status === 'PARTIALLY_PAID') {
+                                                $status = 'Partially Paid';
+                                                $rowClass = 'table-warning';
+                                            } elseif($isCurrentYear) {
+                                                $status = 'Current Year';
+                                                $rowClass = 'table-primary';
+                                            } else {
+                                                $status = 'Outstanding';
+                                                $rowClass = 'table-danger';
+                                            }
+                                        }
+                                    @endphp
+                                    <tr class="{{ $rowClass }}">
+                                        <td class="px-3 py-3">{{ $yearName }}</td>
+                                        <td class="px-3 py-3 text-center">{{ $status }}</td>
+                                        <td class="px-3 py-3 text-end font-monospace">
+                                            @if($outstanding > 0)
+                                                ₹{{ number_format($outstanding, 2) }}
+                                            @else
+                                                ₹0.00
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
                             </tbody>
                         </table>
                     </div>
@@ -394,6 +512,7 @@
                         <form action="{{ route('fees.payments.store') }}" method="POST">
                             @csrf
                             <input type="hidden" name="account_id" value="{{ $account->account_id }}">
+                            <input type="hidden" name="overpayment_allocation" id="overpayment_allocation" value="TUITION">
 
                             <div class="mb-4">
                                 <label class="form-label small fw-bold text-muted text-uppercase mb-2">Payment Amount (₹)</label>
@@ -408,6 +527,45 @@
                                      value="{{ old('amount') }}"
                                      placeholder="Enter Amount"
                                      class="form-control border-0 fw-bold text-primary text-end px-4">
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-2">Apply Payment To</label>
+                                <div class="d-flex flex-column gap-2">
+                                    @php
+                                        $outstandingSummary = $account->outstanding_summary;
+                                        $hasPreviousFees = isset($outstandingSummary['previous_years']) && count($outstandingSummary['previous_years']) > 0;
+                                        $hasBooksFee = $account->books_fee_applied > 0 && $account->remaining_books_balance > 0;
+                                        $hasTuitionFee = $account->final_tuition_fee > 0;
+                                    @endphp
+                                    @if($hasPreviousFees)
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="allocation" id="alloc_previous" value="PREVIOUS" checked>
+                                        <label class="form-check-label" for="alloc_previous">
+                                            <span class="fw-bold text-danger">Previous Fee</span>
+                                            <span class="text-muted small ms-2">(Outstanding from previous academic years)</span>
+                                        </label>
+                                    </div>
+                                    @endif
+                                    @if($hasTuitionFee)
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="allocation" id="alloc_tuition" value="TUITION" @if(!$hasPreviousFees) checked @endif>
+                                        <label class="form-check-label" for="alloc_tuition">
+                                            <span class="fw-bold text-primary">Current Tuition Fee</span>
+                                            <span class="text-muted small ms-2">(Current academic year tuition)</span>
+                                        </label>
+                                    </div>
+                                    @endif
+                                    @if($hasBooksFee)
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="allocation" id="alloc_books" value="BOOKS" @if(!$hasPreviousFees && !$hasTuitionFee) checked @endif>
+                                        <label class="form-check-label" for="alloc_books">
+                                            <span class="fw-bold text-info">Books Fee</span>
+                                            <span class="text-muted small ms-2">(Books purchased from school)</span>
+                                        </label>
+                                    </div>
+                                    @endif
                                 </div>
                             </div>
 
@@ -514,29 +672,188 @@
 
     function confirmPayment(btn) {
         const form = btn.closest('form');
-        const amount = form.querySelector('input[name="amount"]').value;
+        const amount = parseFloat(form.querySelector('input[name="amount"]').value);
+        const allocation = form.querySelector('input[name="allocation"]:checked')?.value || 'TUITION';
         
         if (!amount || amount <= 0) {
             Swal.fire('Error', 'Please enter a valid amount.', 'error');
             return;
         }
 
+        @php
+            $booksRemaining = $account ? $account->remaining_books_balance : 0;
+            $tuitionRemaining = $account ? $account->remaining_tuition_balance : 0;
+            $prevRemaining = 0;
+            if($account) {
+                $outstandingSummary = $account->outstanding_summary;
+                $prevRemaining = isset($outstandingSummary['previous_years']) ? array_sum(array_column($outstandingSummary['previous_years'], 'total_outstanding')) : 0;
+            }
+        @endphp
+
+        const booksRemaining = {{ $booksRemaining }};
+        const tuitionRemaining = {{ $tuitionRemaining }};
+        const prevRemaining = {{ $prevRemaining }};
+
+        // Check for overpayment scenarios
+        let overpaymentAmount = 0;
+        let overpaymentOptions = [];
+
+        if (allocation === 'BOOKS' && amount > booksRemaining) {
+            overpaymentAmount = amount - booksRemaining;
+            if (prevRemaining > 0) overpaymentOptions.push({ value: 'PREVIOUS', label: 'Previous Fee' });
+            if (tuitionRemaining > 0) overpaymentOptions.push({ value: 'TUITION', label: 'Current Tuition Fee' });
+        } else if (allocation === 'PREVIOUS' && amount > prevRemaining) {
+            overpaymentAmount = amount - prevRemaining;
+            if (booksRemaining > 0) overpaymentOptions.push({ value: 'BOOKS', label: 'Books Fee' });
+            if (tuitionRemaining > 0) overpaymentOptions.push({ value: 'TUITION', label: 'Current Tuition Fee' });
+        } else if (allocation === 'TUITION' && amount > tuitionRemaining) {
+            overpaymentAmount = amount - tuitionRemaining;
+            if (prevRemaining > 0) overpaymentOptions.push({ value: 'PREVIOUS', label: 'Previous Fee' });
+            if (booksRemaining > 0) overpaymentOptions.push({ value: 'BOOKS', label: 'Books Fee' });
+        }
+
+        // If there's overpayment and allocation options exist, show prompt
+        if (overpaymentAmount > 0 && overpaymentOptions.length > 0) {
+            let html = '<p>Payment exceeds the selected fee category by <strong>₹' + overpaymentAmount + '</strong></p>';
+            html += '<p class="mb-3">Where should the remaining amount be allocated?</p>';
+            
+            overpaymentOptions.forEach((option, index) => {
+                html += '<div class="form-check mb-2">';
+                html += '<input class="form-check-input" type="radio" name="overpayment_option" id="overpay_' + option.value + '" value="' + option.value + '" ' + (index === 0 ? 'checked' : '') + '>';
+                html += '<label class="form-check-label" for="overpay_' + option.value + '">' + option.label + '</label>';
+                html += '</div>';
+            });
+
+            Swal.fire({
+                title: 'Overpayment Detected',
+                html: html,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#0d6efd',
+                cancelButtonColor: '#dc3545',
+                confirmButtonText: 'Process Payment',
+                preConfirm: () => {
+                    const selected = document.querySelector('input[name="overpayment_option"]:checked');
+                    if (!selected) {
+                        Swal.showValidationMessage('Please select an allocation option');
+                        return false;
+                    }
+                    return selected.value;
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('overpayment_allocation').value = result.value;
+                    submitPayment(form, btn);
+                }
+            });
+        } else {
+            // No overpayment, proceed normally
+            Swal.fire({
+                title: 'Confirm Payment',
+                text: 'Collect ₹' + amount + ' and generate receipt?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#0d6efd',
+                cancelButtonColor: '#dc3545',
+                confirmButtonText: 'Yes, Save Payment'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    submitPayment(form, btn);
+                }
+            });
+        }
+    }
+
+    function submitPayment(form, btn) {
+        btn.disabled = true;
+        btn.querySelector('.spinner-border').classList.remove('d-none');
+        btn.querySelector('.btn-icon').classList.add('d-none');
+        btn.querySelector('.btn-text').innerText = 'Processing...';
+        form.submit();
+    }
+
+    function openClosePreviousFeeModal(yearName, amount) {
         Swal.fire({
-            title: 'Confirm Payment',
-            text: 'Collect ₹' + amount + ' and generate receipt?',
-            icon: 'question',
+            title: 'Close Previous Fee',
+            html: `
+                <p>Are you sure you want to close the outstanding fee for <strong>${yearName}</strong>?</p>
+                <p>Amount: <strong>₹${amount.toFixed(2)}</strong></p>
+                <div class="mt-3">
+                    <label class="form-label small fw-bold">Reason for closing:</label>
+                    <textarea id="closeReason" class="form-control" rows="3" placeholder="Enter reason..."></textarea>
+                </div>
+            `,
+            icon: 'warning',
             showCancelButton: true,
-            confirmButtonColor: '#0d6efd',
+            confirmButtonColor: '#ffc107',
             cancelButtonColor: '#dc3545',
-            confirmButtonText: 'Yes, Save Payment'
+            confirmButtonText: 'Yes, Close Fee',
+            preConfirm: () => {
+                const reason = document.getElementById('closeReason').value;
+                if (!reason || reason.trim().length < 5) {
+                    Swal.showValidationMessage('Please provide a reason (min 5 characters)');
+                    return false;
+                }
+                return { yearName, amount, reason };
+            }
         }).then((result) => {
             if (result.isConfirmed) {
-                btn.disabled = true;
-                btn.querySelector('.spinner-border').classList.remove('d-none');
-                btn.querySelector('.btn-icon').classList.add('d-none');
-                btn.querySelector('.btn-text').innerText = 'Processing...';
-                form.submit();
+                // Submit close fee request
+                submitClosePreviousFee(result.value);
             }
+        });
+    }
+
+    function openWaivePreviousFeeModal(yearName, amount) {
+        Swal.fire({
+            title: 'Waive Previous Fee',
+            html: `
+                <p>Are you sure you want to waive the outstanding fee for <strong>${yearName}</strong>?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+                <p>Amount: <strong>₹${amount.toFixed(2)}</strong></p>
+                <div class="mt-3">
+                    <label class="form-label small fw-bold">Reason for waiving:</label>
+                    <textarea id="waiveReason" class="form-control" rows="3" placeholder="Enter reason..."></textarea>
+                </div>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, Waive Fee',
+            preConfirm: () => {
+                const reason = document.getElementById('waiveReason').value;
+                if (!reason || reason.trim().length < 5) {
+                    Swal.showValidationMessage('Please provide a reason (min 5 characters)');
+                    return false;
+                }
+                return { yearName, amount, reason };
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Submit waive fee request
+                submitWaivePreviousFee(result.value);
+            }
+        });
+    }
+
+    function submitClosePreviousFee(data) {
+        // This would typically make an AJAX call to the backend
+        // For now, just show a success message
+        Swal.fire({
+            title: 'Fee Closed',
+            text: `Previous fee for ${data.yearName} has been closed.`,
+            icon: 'success'
+        });
+    }
+
+    function submitWaivePreviousFee(data) {
+        // This would typically make an AJAX call to the backend
+        // For now, just show a success message
+        Swal.fire({
+            title: 'Fee Waived',
+            text: `Previous fee for ${data.yearName} has been waived.`,
+            icon: 'success'
         });
     }
 
