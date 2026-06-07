@@ -22,64 +22,89 @@ class AdmissionController extends Controller
     }
 
     /**
+     * AJAX Student Finder for Admissions
+     */
+    public function finder(Request $request)
+    {
+        $q = trim($request->get('q', ''));
+        $classId = $request->get('class_id');
+        $status = $request->get('status');
+
+        $query = Admission::with(['student', 'classRoom', 'section', 'academicYear']);
+
+        if (!empty($q)) {
+            $query->whereHas('student', function ($sub) use ($q) {
+                $sub->where('student_name', 'like', "%{$q}%")
+                    ->orWhere('admission_no', 'like', "{$q}%")
+                    ->orWhere('father_name', 'like', "%{$q}%")
+                    ->orWhere('mother_name', 'like', "%{$q}%")
+                    ->orWhere('guardian_name', 'like', "%{$q}%");
+            });
+        }
+
+        if ($classId) {
+            $query->where('class_id', $classId);
+        }
+
+        if ($status) {
+            $query->where('admission_status', $status);
+        }
+
+        $results = $query->orderBy('created_at', 'desc')->limit(50)->get();
+
+        return response()->json(
+            $results->map(function ($adm) {
+                $student = $adm->student;
+                return [
+                    'admission_id' => $adm->admission_id,
+                    'admission_no' => $student->admission_no,
+                    'student_name' => strtoupper($student->student_name),
+                    'class_name' => $adm->classRoom->class_name,
+                    'section_name' => $adm->section->section_name ?? 'N/A',
+                    'father_name' => $student->father_name,
+                    'phone_primary' => $student->phone_primary,
+                    'photo_url' => $student->photo_path ? asset('storage/' . $student->photo_path) : null,
+                    'admission_date' => $adm->created_at->format('d M Y'),
+                    'status' => $adm->admission_status,
+                ];
+            })
+        );
+    }
+
+    /**
+     * Dashboard Stats for Admissions
+     */
+    public function dashboardStats()
+    {
+        $today = now()->startOfDay();
+        $thisMonth = now()->startOfMonth();
+        
+        $stats = [
+            'total_students' => \App\Models\Student::where('status', 'ACTIVE')->count(),
+            'today_admissions' => Admission::whereDate('created_at', $today)->count(),
+            'month_admissions' => Admission::where('created_at', '>=', $thisMonth)->count(),
+            'pending_verification' => Admission::whereIn('admission_status', ['SUBMITTED', 'DRAFT'])->count(),
+            'approved_admissions' => Admission::where('admission_status', 'APPROVED')->count(),
+            'rejected_admissions' => Admission::where('admission_status', 'REJECTED')->count(),
+            'missing_docs' => Admission::whereDoesntHave('student.documents')->count(),
+            'missing_photos' => \App\Models\Student::whereNull('photo_path')->orWhere('photo_path', '')->count(),
+        ];
+
+        return response()->json($stats);
+    }
+
+    /**
      * Display a listing of the resource.
      */
     public function index(Request $request)
     {
-        $query = Admission::with(['student', 'academicYear', 'classRoom', 'section']);
-
-        // Enhanced Search Filters
-        if ($request->filled('admission_no')) {
-            $query->whereHas('student', function ($q) use ($request) {
-                $q->where('admission_no', 'like', "%{$request->admission_no}%");
-            });
-        }
-
-        if ($request->filled('student_name')) {
-            $query->whereHas('student', function ($q) use ($request) {
-                $q->where('student_name', 'like', "%{$request->student_name}%");
-            });
-        }
-
-        if ($request->filled('father_name')) {
-            $query->whereHas('student', function ($q) use ($request) {
-                $q->where('father_name', 'like', "%{$request->father_name}%");
-            });
-        }
-
-        if ($request->filled('phone_primary')) {
-            $query->whereHas('student', function ($q) use ($request) {
-                $q->where('phone_primary', 'like', "%{$request->phone_primary}%");
-            });
-        }
-
-        if ($request->filled('aadhaar_no')) {
-            $query->whereHas('student', function ($q) use ($request) {
-                $q->where('aadhaar_no', 'like', "%{$request->aadhaar_no}%");
-            });
-        }
-
-        if ($request->filled('pen_no')) {
-            $query->whereHas('student', function ($q) use ($request) {
-                $q->where('pen_no', 'like', "%{$request->pen_no}%");
-            });
-        }
-
-        if ($request->filled('class_id')) {
-            $query->where('class_id', $request->class_id);
-        }
-
-        if ($request->filled('admission_status')) {
-            $query->where('admission_status', $request->admission_status);
-        }
-
-        if ($request->filled('academic_year_id')) {
-            $query->where('academic_year_id', $request->academic_year_id);
-        }
-
-        $admissions = $query->orderByDesc('created_at')->paginate(15)->withQueryString();
         $classes = ClassRoom::all();
         $academicYears = AcademicYear::all();
+        
+        // Initial page load with pagination
+        $admissions = Admission::with(['student', 'academicYear', 'classRoom', 'section'])
+            ->orderByDesc('created_at')
+            ->paginate(20);
 
         return view('admissions.index', compact('admissions', 'classes', 'academicYears'));
     }
@@ -140,6 +165,60 @@ class AdmissionController extends Controller
         $feeAccount = $admission->student->currentEnrollment()->feeAccount ?? null;
 
         return view('admissions.show', compact('admission', 'feeAccount'));
+    }
+
+    /**
+     * Store a newly uploaded document for a student.
+     */
+    public function storeDocument(Request $request, Admission $admission)
+    {
+        $request->validate([
+            'document_type' => 'required|string',
+            'document' => 'required|file|mimes:jpg,jpeg,png,pdf|max:2048',
+        ]);
+
+        try {
+            $student = $admission->student;
+            $file = $request->file('document');
+            $type = $request->document_type;
+
+            // Delete existing document of the same type
+            $existing = \App\Models\StudentDocument::where('student_id', $student->student_id)
+                ->where('document_type', $type)
+                ->first();
+
+            if ($existing) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($existing->file_path);
+                $existing->delete();
+            }
+
+            $path = $file->store('students/documents', 'public');
+
+            \App\Models\StudentDocument::create([
+                'student_id' => $student->student_id,
+                'document_type' => $type,
+                'file_name' => $file->getClientOriginalName(),
+                'file_path' => $path,
+                'uploaded_at' => now(),
+            ]);
+
+            return redirect()->back()->with('success', "Document uploaded successfully.");
+        } catch (Exception $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Approve admission (Management Action)
+     */
+    public function approve(Admission $admission)
+    {
+        try {
+            $this->admissionService->approveAdmission($admission->admission_id, auth()->id());
+            return redirect()->back()->with('success', "Admission for {$admission->student->student_name} has been approved.");
+        } catch (Exception $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
     }
 
     /**

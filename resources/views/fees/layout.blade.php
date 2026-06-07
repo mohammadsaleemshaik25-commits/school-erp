@@ -127,10 +127,17 @@
                     <span class="fw-semibold">Closing Report</span>
                 </a>
 
+                @if($role === 'CLERK')
+                    <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('fees.adjustments.index') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('fees.adjustments.index') }}">
+                        <i class="bi bi-clock-history me-3 fs-5"></i>
+                        <span class="fw-semibold">My Requests</span>
+                    </a>
+                @endif
+
                 @if(in_array($role, ['ADMINISTRATOR', 'ADMIN', 'CORRESPONDENT', 'PRINCIPAL']))
                     <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('fees.adjustments.index') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('fees.adjustments.index') }}">
                         <i class="bi bi-percent me-3 fs-5"></i>
-                        <span class="fw-semibold">Concessions</span>
+                        <span class="fw-semibold">Concession Management</span>
                     </a>
                     
                     <div class="my-3 mx-2 border-bottom opacity-10"></div>
@@ -147,10 +154,6 @@
                     <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->is('fees/reports/clerk') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('fees.reports.clerk') }}">
                         <i class="bi bi-person-lines-fill me-3 fs-5"></i>
                         <span class="fw-semibold">Clerk Report</span>
-                    </a>
-                    <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('fees.reports.concessions') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('fees.reports.concessions') }}">
-                        <i class="bi bi-file-earmark-bar-graph me-3 fs-5"></i>
-                        <span class="fw-semibold">Concession Report</span>
                     </a>
                 @endif
             </nav>
@@ -295,6 +298,22 @@
     {{-- Session Notifications --}}
     <script>
         $(document).ready(function() {
+            @if(session('success_clerk'))
+                Swal.fire({
+                    icon: 'success',
+                    title: '✓ ' + @json(session('success_clerk')['message']),
+                    html: `
+                        <div class="text-start">
+                            <div class="mb-2"><span class="badge bg-primary">Request ID: #${ @json(session('success_clerk')['id']) }</span></div>
+                            <div class="mb-2"><strong>Status:</strong> <span class="text-warning">${ @json(session('success_clerk')['status']) }</span></div>
+                            <p class="small text-muted mb-0">${ @json(session('success_clerk')['detail']) }</p>
+                        </div>
+                    `,
+                    confirmButtonColor: '#0d6efd',
+                    confirmButtonText: 'Understood'
+                });
+            @endif
+
             @if(session('success'))
                 Swal.fire({ icon: 'success', title: 'Success', text: @json(session('success')), confirmButtonColor: '#0d6efd', timer: 3000, timerProgressBar: true });
             @endif

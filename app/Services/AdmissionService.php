@@ -17,7 +17,7 @@ use Exception;
 class AdmissionService
 {
     /**
-     * Create a new admission with all related records.
+     * Create a new admission (Initial Step: PENDING)
      */
     public function createAdmission(array $data, int $userId): Admission
     {
@@ -25,22 +25,13 @@ class AdmissionService
             // 1. Generate Admission Number
             $admissionNo = $this->generateAdmissionNumber();
 
-            // 2. Find Fee Structure
-            $feeStructure = FeeStructure::where('academic_year_id', $data['academic_year_id'])
-                ->where('class_id', $data['class_id'])
-                ->first();
-
-            if (!$feeStructure) {
-                throw new Exception("Fee structure not defined for the selected academic year and class.");
-            }
-
-            // 3. Handle Photo Upload (Optional)
+            // 2. Handle Photo Upload (Optional)
             $photoPath = null;
             if (isset($data['photo']) && $data['photo']->isValid()) {
                 $photoPath = $data['photo']->store('students/photos', 'public');
             }
 
-            // 4. Create Student Record
+            // 3. Create Student Record (Basic Info)
             $student = Student::create([
                 'admission_no' => $admissionNo,
                 'student_name' => $data['student_name'],
@@ -56,50 +47,25 @@ class AdmissionService
                 'email' => $data['email'] ?? null,
                 'address' => $data['address'],
                 'admission_date' => $data['admission_date'],
+                'blood_group' => $data['blood_group'] ?? null,
+                'religion' => $data['religion'] ?? null,
+                'category' => $data['category'] ?? null,
                 'photo_path' => $photoPath,
-                'status' => 'ACTIVE',
+                'status' => 'INACTIVE', // Becomes ACTIVE after approval and fee account creation
             ]);
 
-            // 5. Create Enrollment
-            $enrollment = StudentEnrollment::create([
-                'student_id' => $student->student_id,
-                'academic_year_id' => $data['academic_year_id'],
-                'class_id' => $data['class_id'],
-                'section_id' => $data['section_id'],
-                'promotion_status' => 'NEW',
-                'status' => 'ACTIVE',
-            ]);
-
-            // 6. Create Student Fee Account
-            $feeAccount = StudentFeeAccount::create([
-                'enrollment_id' => $enrollment->enrollment_id,
-                'fee_structure_id' => $feeStructure->fee_structure_id,
-                'discount_amount' => 0,
-                'final_tuition_fee' => $feeStructure->tuition_fee,
-                'books_from_school' => 1,
-                'books_fee_applied' => 0,
-                'books_fee' => $feeStructure->books_fee,
-                'net_fee' => $feeStructure->tuition_fee,
-                'previous_balance' => 0,
-                'waived_amount' => 0,
-                'total_due' => $feeStructure->tuition_fee,
-                'status' => 'ACTIVE',
-            ]);
-
-            // 7. Create Admission Record
+            // 4. Create Admission Record (Status: PENDING)
             $admission = Admission::create([
                 'student_id' => $student->student_id,
                 'academic_year_id' => $data['academic_year_id'],
                 'class_id' => $data['class_id'],
                 'section_id' => $data['section_id'],
-                'admission_status' => 'APPROVED',
+                'admission_status' => 'PENDING',
                 'remarks' => $data['remarks'] ?? null,
-                'approved_by' => $userId,
-                'approved_at' => now(),
                 'created_by' => $userId,
             ]);
 
-            // 8. Handle Document Uploads (Optional)
+            // 5. Handle Document Uploads (Optional)
             if (isset($data['documents']) && is_array($data['documents'])) {
                 foreach ($data['documents'] as $docType => $file) {
                     if ($file && $file->isValid()) {
@@ -115,14 +81,126 @@ class AdmissionService
                 }
             }
 
-            // 9. Create Audit Log
+            // 6. Create Audit Log
             $this->logAction(
                 $userId,
                 'ADMISSION_CREATED',
                 'admissions',
                 $admission->admission_id,
                 null,
-                "Created admission for student: {$student->student_name} (ID: {$student->student_id})"
+                "Created pending admission for student: {$student->student_name} (ID: {$student->student_id})"
+            );
+
+            return $admission;
+        });
+    }
+
+    /**
+     * Approve a pending admission.
+     */
+    public function approveAdmission(int $admissionId, int $userId): Admission
+    {
+        return DB::transaction(function () use ($admissionId, $userId) {
+            $admission = Admission::findOrFail($admissionId);
+            
+            if ($admission->admission_status !== 'PENDING') {
+                throw new Exception("Only pending admissions can be approved.");
+            }
+
+            $admission->update([
+                'admission_status' => 'APPROVED',
+                'approved_by' => $userId,
+                'approved_at' => now(),
+            ]);
+
+            $this->logAction(
+                $userId,
+                'ADMISSION_APPROVED',
+                'admissions',
+                $admissionId,
+                null,
+                "Admission approved. Awaiting Books Decision."
+            );
+
+            return $admission;
+        });
+    }
+
+    /**
+     * Finalize admission after Books Decision (Creates Enrollment and Fee Account)
+     */
+    public function finalizeAdmission(int $admissionId, string $booksStatus, int $userId): Admission
+    {
+        return DB::transaction(function () use ($admissionId, $booksStatus, $userId) {
+            $admission = Admission::with('student')->findOrFail($admissionId);
+            
+            if ($admission->admission_status !== 'APPROVED') {
+                throw new Exception("Admission must be approved before finalization.");
+            }
+
+            // Check if already finalized
+            if (StudentEnrollment::where('student_id', $admission->student_id)
+                ->where('academic_year_id', $admission->academic_year_id)
+                ->exists()) {
+                throw new Exception("Admission is already finalized (Enrollment exists).");
+            }
+
+            // 1. Find Fee Structure
+            $feeStructure = FeeStructure::where('academic_year_id', $admission->academic_year_id)
+                ->where('class_id', $admission->class_id)
+                ->first();
+
+            if (!$feeStructure) {
+                throw new Exception("Fee structure not defined for the selected academic year and class.");
+            }
+
+            // 2. Create Enrollment
+            $enrollment = StudentEnrollment::create([
+                'student_id' => $admission->student_id,
+                'academic_year_id' => $admission->academic_year_id,
+                'class_id' => $admission->class_id,
+                'section_id' => $admission->section_id,
+                'promotion_status' => 'NEW',
+                'status' => 'ACTIVE',
+            ]);
+
+            // 3. Determine Books Fee Applied
+            $booksFeeApplied = 0;
+            $booksFromSchool = false;
+            if ($booksStatus === StudentFeeAccount::BOOKS_SCHOOL) {
+                $booksFeeApplied = $feeStructure->books_fee;
+                $booksFromSchool = true;
+            }
+
+            // 4. Create Student Fee Account
+            StudentFeeAccount::create([
+                'enrollment_id' => $enrollment->enrollment_id,
+                'fee_structure_id' => $feeStructure->fee_structure_id,
+                'discount_amount' => 0,
+                'final_tuition_fee' => $feeStructure->tuition_fee,
+                'books_status' => $booksStatus,
+                'books_from_school' => $booksFromSchool,
+                'books_decision_by' => $userId,
+                'books_decision_date' => now(),
+                'books_fee_applied' => $booksFeeApplied,
+                'books_fee' => $feeStructure->books_fee,
+                'net_fee' => $feeStructure->tuition_fee + $booksFeeApplied,
+                'previous_balance' => 0,
+                'waived_amount' => 0,
+                'total_due' => $feeStructure->tuition_fee + $booksFeeApplied,
+                'status' => 'UNPAID',
+            ]);
+
+            // 5. Activate Student
+            $admission->student->update(['status' => 'ACTIVE']);
+
+            $this->logAction(
+                $userId,
+                'ADMISSION_FINALIZED',
+                'admissions',
+                $admissionId,
+                null,
+                "Admission finalized with Books Decision: {$booksStatus}. Fee account created."
             );
 
             return $admission;

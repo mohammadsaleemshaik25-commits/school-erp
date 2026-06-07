@@ -56,6 +56,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/books-decisions', [BooksDecisionController::class, 'index'])->name('books.index');
         Route::get('/books-decisions/{account}/edit', [BooksDecisionController::class, 'edit'])->name('books.edit');
         Route::put('/books-decisions/{account}', [BooksDecisionController::class, 'update'])->name('books.update');
+        Route::post('/books-decisions/admission/{admission}', [BooksDecisionController::class, 'finalizeAdmission'])->name('books.finalize');
         Route::get('/books-reports', [BooksDecisionController::class, 'report'])->name('books.report');
 
         // Promotion Routes
@@ -67,7 +68,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         });
 
         Route::get('/fees/adjustments', [FeeAdjustmentController::class, 'index'])->name('fees.adjustments.index');
-        Route::get('/fees/adjustments/search', [FeeAdjustmentController::class, 'searchAccounts'])->name('fees.adjustments.search');
+        Route::get('/fees/adjustments/finder', [FeeAdjustmentController::class, 'finder'])->name('fees.adjustments.finder');
         Route::post('/fees/adjustments', [FeeAdjustmentController::class, 'store'])->name('fees.adjustments.store');
         Route::patch('/fees/books-fee/{accountId}', [BooksFeeController::class, 'update'])->name('fees.books.update');
 
@@ -99,7 +100,26 @@ Route::middleware(['auth', 'active'])->group(function () {
     // role: Principal, Correspondent, Admin
     // ==========================================
     Route::middleware('role:Principal,Correspondent,Admin,Administrator')->group(function () {
+        Route::get('/admissions/finder', [AdmissionController::class, 'finder'])->name('admissions.finder');
+        Route::get('/admissions/stats', [AdmissionController::class, 'dashboardStats'])->name('admissions.stats');
+        
+        // Bulk Import Routes
+        Route::get('/admissions/bulk', [AdmissionBulkImportController::class, 'index'])->name('admissions.bulk.index');
+        Route::get('/admissions/bulk/template', [AdmissionBulkImportController::class, 'downloadTemplate'])->name('admissions.bulk.template');
+        Route::post('/admissions/bulk/upload', [AdmissionBulkImportController::class, 'upload'])->name('admissions.bulk.upload');
+        Route::post('/admissions/bulk/confirm', [AdmissionBulkImportController::class, 'confirm'])->name('admissions.bulk.confirm');
+
+        // Photo Sync Routes
+        Route::get('/admissions/photo-sync', [AdmissionPhotoSyncController::class, 'index'])->name('admissions.photo-sync.index');
+        Route::post('/admissions/photo-sync', [AdmissionPhotoSyncController::class, 'sync'])->name('admissions.photo-sync.sync');
+
+        // Transfer Routes
+        Route::get('/admissions/transfer', [AdmissionTransferController::class, 'index'])->name('admissions.transfer.index');
+        Route::post('/admissions/transfer', [AdmissionTransferController::class, 'process'])->name('admissions.transfer.process');
+
         Route::resource('admissions', AdmissionController::class);
+        Route::post('/admissions/{admission}/approve', [AdmissionController::class, 'approve'])->name('admissions.approve');
+        Route::post('/admissions/{admission}/documents', [AdmissionController::class, 'storeDocument'])->name('admissions.documents.store');
         Route::delete('/admissions/documents/{documentId}', [AdmissionController::class, 'deleteDocument'])->name('admissions.documents.destroy');
         Route::get('/admissions/register', [AdmissionRegisterController::class, 'index']);
 
