@@ -128,6 +128,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/admissions/{admission}/documents', [AdmissionController::class, 'storeDocument'])->name('admissions.documents.store');
         Route::delete('/admissions/documents/{documentId}', [AdmissionController::class, 'deleteDocument'])->name('admissions.documents.destroy');
         Route::post('/admissions/documents/{documentId}/verify', [AdmissionController::class, 'verifyDocument'])->name('admissions.documents.verify');
+        Route::post('/admissions/documents/{documentId}/reject', [AdmissionController::class, 'rejectDocument'])->name('admissions.documents.reject');
+        Route::get('/admissions/verification-queue', [AdmissionController::class, 'verificationQueue'])->name('admissions.verification-queue');
         Route::post('/admissions/{admission}/reveal-sensitive', [AdmissionController::class, 'revealSensitiveData'])->name('admissions.reveal-sensitive');
         Route::get('/admissions/register', [AdmissionRegisterController::class, 'index']);
 

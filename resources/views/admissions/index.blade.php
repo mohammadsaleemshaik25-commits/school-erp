@@ -7,6 +7,11 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 mb-0 fw-bold text-dark">Admissions Management</h1>
         <div class="d-flex gap-2">
+            @if(in_array(strtoupper(optional(auth()->user()->role)->role_name ?? ''), ['ADMINISTRATOR', 'ADMIN', 'PRINCIPAL', 'CORRESPONDENT']))
+            <a href="{{ route('admissions.verification-queue') }}" class="btn btn-outline-warning px-4 rounded-pill shadow-sm">
+                <i class="bi bi-shield-check me-2"></i> Verification Queue
+            </a>
+            @endif
             <a href="{{ route('admissions.create') }}" class="btn btn-primary shadow-sm px-4 rounded-pill">
                 <i class="bi bi-plus-lg me-2"></i> New Admission
             </a>

@@ -356,12 +356,19 @@ class AdmissionController extends Controller
     }
 
     /**
-     * Verify a specific document
+     * Verify a specific document (Management Action)
      */
     public function verifyDocument(Request $request, $documentId)
     {
+        $role = strtoupper(optional(auth()->user()->role)->role_name ?? '');
+        if (!in_array($role, ['ADMIN', 'ADMINISTRATOR', 'PRINCIPAL', 'CORRESPONDENT'])) {
+            return response()->json(['success' => false, 'error' => 'Unauthorized action.'], 403);
+        }
+
         try {
             $document = \App\Models\StudentDocument::findOrFail($documentId);
+            $oldStatus = $document->verification_status;
+            
             $document->update([
                 'verification_status' => \App\Models\StudentDocument::STATUS_VERIFIED,
                 'verified_at' => now(),
@@ -374,7 +381,7 @@ class AdmissionController extends Controller
                 'action' => 'DOCUMENT_VERIFIED',
                 'table_name' => 'student_documents',
                 'record_id' => $documentId,
-                'old_value' => $document->verification_status,
+                'old_value' => $oldStatus,
                 'new_value' => \App\Models\StudentDocument::STATUS_VERIFIED,
                 'ip_address' => $request->ip(),
             ]);
@@ -383,6 +390,100 @@ class AdmissionController extends Controller
         } catch (Exception $e) {
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Reject a specific document (Management Action)
+     */
+    public function rejectDocument(Request $request, $documentId)
+    {
+        $role = strtoupper(optional(auth()->user()->role)->role_name ?? '');
+        if (!in_array($role, ['ADMIN', 'ADMINISTRATOR', 'PRINCIPAL', 'CORRESPONDENT'])) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'error' => 'Unauthorized action.'], 403);
+            }
+            return back()->with('error', 'Unauthorized action.');
+        }
+
+        $request->validate([
+            'remarks' => 'required|string|max:500',
+        ]);
+
+        try {
+            $document = \App\Models\StudentDocument::findOrFail($documentId);
+            $oldStatus = $document->verification_status;
+
+            $document->update([
+                'verification_status' => \App\Models\StudentDocument::STATUS_REJECTED,
+                'verified_at' => now(),
+                'verified_by' => Auth::id(),
+                'remarks' => $request->remarks,
+            ]);
+
+            // Log the action
+            \App\Models\AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'DOCUMENT_REJECTED',
+                'table_name' => 'student_documents',
+                'record_id' => $documentId,
+                'old_value' => $oldStatus,
+                'new_value' => \App\Models\StudentDocument::STATUS_REJECTED,
+                'ip_address' => $request->ip(),
+            ]);
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => true]);
+            }
+
+            return back()->with('success', 'Document rejected successfully.');
+        } catch (Exception $e) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+            }
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Display the Verification Queue of documents awaiting review (Management Action)
+     */
+    public function verificationQueue(Request $request)
+    {
+        $role = strtoupper(optional(auth()->user()->role)->role_name ?? '');
+        if (!in_array($role, ['ADMIN', 'ADMINISTRATOR', 'PRINCIPAL', 'CORRESPONDENT'])) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $search = $request->get('search');
+        $docType = $request->get('document_type');
+
+        $query = \App\Models\StudentDocument::with(['student.enrollments' => function($q) {
+            $q->where('status', 'ACTIVE')->with(['classRoom', 'section']);
+        }])
+        ->where('verification_status', \App\Models\StudentDocument::STATUS_UPLOADED);
+
+        if ($search) {
+            $query->whereHas('student', function ($q) use ($search) {
+                $q->where('student_name', 'like', "%{$search}%")
+                  ->orWhere('admission_no', 'like', "%{$search}%");
+            });
+        }
+
+        if ($docType) {
+            $query->where('document_type', $docType);
+        }
+
+        $documents = $query->orderBy('uploaded_at', 'desc')->paginate(20);
+
+        $documentTypes = [
+            'PHOTO' => 'Student Photo',
+            'STUDENT_AADHAAR' => 'Student Aadhaar',
+            'BIRTH_CERTIFICATE' => 'Birth Certificate',
+            'TC' => 'Transfer Certificate',
+            'PARENT_AADHAAR' => 'Parent Aadhaar',
+        ];
+
+        return view('admissions.verification_queue', compact('documents', 'documentTypes', 'search', 'docType'));
     }
 
     /**

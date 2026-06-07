@@ -145,11 +145,15 @@
                                 'PARENT_AADHAAR' => 'Parent Aadhaar'
                             ];
                             $uploadedDocs = $admission->student->documents->keyBy('document_type');
+                            $userRole = strtoupper(optional(auth()->user()->role)->role_name ?? '');
+                            $isManagement = in_array($userRole, ['ADMINISTRATOR', 'ADMIN', 'PRINCIPAL', 'CORRESPONDENT']);
+                            $isClerkOrManagement = in_array($userRole, ['CLERK', 'ADMINISTRATOR', 'ADMIN', 'PRINCIPAL', 'CORRESPONDENT']);
                         @endphp
 
                         @foreach($requiredDocs as $type => $label)
                             @php
                                 $doc = $uploadedDocs->get($type);
+                                $isMandatory = in_array($type, \App\Models\Student::MANDATORY_DOCS);
                                 $statusBadge = '';
                                 $statusIcon = '';
                                 if ($doc) {
@@ -174,7 +178,10 @@
                             @endphp
                             <li class="list-group-item d-flex justify-content-between align-items-center py-3">
                                 <div>
-                                    <div class="fw-semibold text-dark">{{ $label }}</div>
+                                    <div class="fw-semibold text-dark">
+                                        {{ $label }}
+                                        <span class="small fw-normal text-muted">({{ $isMandatory ? 'Mandatory' : 'Optional' }})</span>
+                                    </div>
                                     <span class="badge {{ $statusBadge }} rounded-pill small mt-1">
                                         <i class="bi {{ $statusIcon }} me-1"></i> {{ $statusText }}
                                     </span>
@@ -192,17 +199,22 @@
                                         </a>
                                     @endif
 
-                                    @if(in_array(strtoupper(optional(auth()->user()->role)->role_name ?? ''), ['ADMINISTRATOR', 'ADMIN', 'PRINCIPAL']))
+                                    @if($isClerkOrManagement)
                                         <button class="btn btn-light btn-sm rounded-circle border ms-1 shadow-sm"
                                                 onclick="openUploadModal('{{ $type }}', '{{ $label }}')" title="Upload/Replace">
                                             <i class="bi bi-cloud-upload text-info"></i>
                                         </button>
-                                        @if($doc && $doc->verification_status !== 'VERIFIED')
-                                            <button class="btn btn-light btn-sm rounded-circle border ms-1 shadow-sm"
-                                                    onclick="verifyDocument('{{ $doc->document_id }}')" title="Verify Document">
-                                                <i class="bi bi-shield-check text-success"></i>
-                                            </button>
-                                        @endif
+                                    @endif
+
+                                    @if($isManagement && $doc && $doc->verification_status !== 'VERIFIED')
+                                        <button class="btn btn-light btn-sm rounded-circle border ms-1 shadow-sm"
+                                                onclick="verifyDocument('{{ $doc->document_id }}')" title="Verify Document">
+                                            <i class="bi bi-shield-check text-success"></i>
+                                        </button>
+                                        <button class="btn btn-light btn-sm rounded-circle border ms-1 shadow-sm"
+                                                onclick="openRejectDocModal('{{ $doc->document_id }}')" title="Reject Document">
+                                            <i class="bi bi-x-circle text-danger"></i>
+                                        </button>
                                     @endif
                                 </div>
                             </li>
@@ -546,6 +558,33 @@
     </div>
 </div>
 
+<!-- Reject Document Modal -->
+<div class="modal fade" id="rejectDocModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-danger text-white py-3">
+                <h6 class="modal-title fw-bold"><i class="bi bi-x-circle me-2"></i> Reject Document</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="rejectDocForm" method="POST">
+                @csrf
+                <div class="modal-body p-4">
+                    <div class="mb-0">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Reason for Rejection <span class="text-danger">*</span></label>
+                        <textarea name="remarks" class="form-control" rows="4" required placeholder="Describe why this document is rejected (e.g. blurry scan, incorrect information)..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0 py-3">
+                    <button type="button" class="btn btn-link text-muted text-decoration-none px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger px-4 fw-bold rounded-pill shadow-sm">
+                        <i class="bi bi-x-lg me-2"></i> Reject Document
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Reject Admission Modal -->
 <div class="modal fade" id="rejectModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -582,6 +621,12 @@
         document.getElementById('modal_doc_type').value = type;
         document.getElementById('modal_doc_label').value = label;
         new bootstrap.Modal(document.getElementById('uploadModal')).show();
+    }
+
+    function openRejectDocModal(documentId) {
+        const form = document.getElementById('rejectDocForm');
+        form.action = `/admissions/documents/${documentId}/reject`;
+        new bootstrap.Modal(document.getElementById('rejectDocModal')).show();
     }
 </script>
 @endsection

@@ -119,6 +119,11 @@ class AdmissionService
                 throw new Exception("Only DRAFT or SUBMITTED admissions can be verified.");
             }
 
+            // Check mandatory documents
+            if (!$admission->student->hasMandatoryDocuments()) {
+                throw new Exception("Cannot verify admission: Mandatory documents (Photo, Student Aadhaar) must be uploaded and not rejected.");
+            }
+
             // Mark all documents as verified
             foreach ($admission->student->documents as $document) {
                 $document->update([
@@ -153,10 +158,15 @@ class AdmissionService
     public function approveAdmission(int $admissionId, int $userId): Admission
     {
         return DB::transaction(function () use ($admissionId, $userId) {
-            $admission = Admission::findOrFail($admissionId);
+            $admission = Admission::with('student.documents')->findOrFail($admissionId);
 
             if (!in_array($admission->admission_status, [Admission::STATUS_VERIFIED, Admission::STATUS_SUBMITTED, 'PENDING'])) {
                 throw new Exception("Only verified or submitted admissions can be approved.");
+            }
+
+            // Check mandatory documents
+            if (!$admission->student->hasMandatoryDocuments()) {
+                throw new Exception("Cannot approve admission: Mandatory documents (Photo, Student Aadhaar) must be uploaded and not rejected.");
             }
 
             $admission->update([

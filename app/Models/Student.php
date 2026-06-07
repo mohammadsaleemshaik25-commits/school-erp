@@ -114,4 +114,24 @@ class Student extends Model
             ->orderByDesc('uploaded_at')
             ->first();
     }
+
+    // Document Tracker Constants
+    public const MANDATORY_DOCS = ['PHOTO', 'STUDENT_AADHAAR'];
+    public const OPTIONAL_DOCS = ['BIRTH_CERTIFICATE', 'TC', 'PARENT_AADHAAR'];
+
+    /**
+     * Check if the student has all mandatory documents uploaded and not rejected.
+     */
+    public function hasMandatoryDocuments(): bool
+    {
+        $docs = $this->documents;
+
+        $hasPhoto = !empty($this->photo_path) || $docs->where('document_type', 'PHOTO')->where('verification_status', '!=', StudentDocument::STATUS_REJECTED)->isNotEmpty();
+        if (!$hasPhoto) {
+            return false;
+        }
+
+        $hasAadhaar = $docs->where('document_type', 'STUDENT_AADHAAR')->where('verification_status', '!=', StudentDocument::STATUS_REJECTED)->isNotEmpty();
+        return $hasAadhaar;
+    }
 }
