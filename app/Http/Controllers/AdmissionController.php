@@ -11,6 +11,7 @@ use App\Services\AdmissionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Exception;
 
 class AdmissionController extends Controller
@@ -130,43 +131,96 @@ class AdmissionController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'student_name' => 'required|string|max:100',
-            'dob' => 'required|date',
-            'gender' => 'required|string|max:10',
-            'nationality' => 'nullable|string|max:50',
-            'father_name' => 'required|string|max:100',
-            'mother_name' => 'required|string|max:100',
-            'guardian_name' => 'nullable|string|max:100',
-            'aadhaar_no' => 'required|string|max:20|unique:students,aadhaar_no',
-            'pen_no' => 'required|string|max:30|unique:students,pen_no',
-            'phone_primary' => 'required|string|max:15',
-            'phone_secondary' => 'nullable|string|max:15',
-            'email' => 'nullable|email|max:100',
-            'address' => 'required|string',
-            'permanent_address' => 'nullable|string',
-            'village' => 'nullable|string|max:100',
-            'district' => 'nullable|string|max:100',
-            'state' => 'nullable|string|max:100',
-            'pin_code' => 'nullable|string|max:10',
-            'religion' => 'nullable|string|max:50',
-            'category' => 'nullable|string|max:50',
-            'blood_group' => 'nullable|string|max:10',
-            'occupation' => 'nullable|string|max:100',
-            'annual_income' => 'nullable|numeric',
-            'previous_school' => 'nullable|string|max:200',
-            'previous_class' => 'nullable|string|max:50',
-            'admission_date' => 'required|date',
-            'academic_year_id' => 'required|exists:academic_years,academic_year_id',
-            'class_id' => 'required|exists:classes,class_id',
-            'section_id' => 'required|exists:sections,section_id',
-            'photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
-            'documents.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
-        ]);
+        $isDraft = $request->input('save_as_draft') === 'true';
+
+        // Draft saves use lenient validation; full submissions use strict validation
+        if ($isDraft) {
+            $validationRules = [
+                'student_name'    => 'required|string|max:100',
+                'dob'             => 'nullable|date',
+                'gender'          => 'nullable|string|max:10',
+                'nationality'     => 'nullable|string|max:50',
+                'father_name'     => 'nullable|string|max:100',
+                'mother_name'     => 'nullable|string|max:100',
+                'guardian_name'   => 'nullable|string|max:100',
+                'aadhaar_no'      => 'nullable|string|max:20|unique:students,aadhaar_no',
+                'pen_no'          => 'nullable|string|max:30|unique:students,pen_no',
+                'phone_primary'   => 'nullable|string|max:15',
+                'phone_secondary' => 'nullable|string|max:15',
+                'email'           => 'nullable|email|max:100',
+                'address'         => 'nullable|string',
+                'permanent_address' => 'nullable|string',
+                'village'         => 'nullable|string|max:100',
+                'district'        => 'nullable|string|max:100',
+                'state'           => 'nullable|string|max:100',
+                'pin_code'        => 'nullable|string|max:10',
+                'religion'        => 'nullable|string|max:50',
+                'category'        => 'nullable|string|max:50',
+                'blood_group'     => 'nullable|string|max:10',
+                'occupation'      => 'nullable|string|max:100',
+                'annual_income'   => 'nullable|numeric',
+                'previous_school' => 'nullable|string|max:200',
+                'previous_class'  => 'nullable|string|max:50',
+                'admission_date'  => 'nullable|date',
+                // DB schema enforces NOT NULL on these FK columns even in draft
+                'academic_year_id'=> 'required|exists:academic_years,academic_year_id',
+                'class_id'        => 'required|exists:classes,class_id',
+                'section_id'      => 'required|exists:sections,section_id',
+                'photo'           => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+                'documents.*'     => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            ];
+        } else {
+            $validationRules = [
+                'student_name'    => 'required|string|max:100',
+                'dob'             => 'required|date',
+                'gender'          => 'required|string|max:10',
+                'nationality'     => 'nullable|string|max:50',
+                'father_name'     => 'required|string|max:100',
+                'mother_name'     => 'required|string|max:100',
+                'guardian_name'   => 'nullable|string|max:100',
+                'aadhaar_no'      => 'required|string|max:20|unique:students,aadhaar_no',
+                'pen_no'          => 'required|string|max:30|unique:students,pen_no',
+                'phone_primary'   => 'required|string|max:15',
+                'phone_secondary' => 'nullable|string|max:15',
+                'email'           => 'nullable|email|max:100',
+                'address'         => 'required|string',
+                'permanent_address' => 'nullable|string',
+                'village'         => 'nullable|string|max:100',
+                'district'        => 'nullable|string|max:100',
+                'state'           => 'nullable|string|max:100',
+                'pin_code'        => 'nullable|string|max:10',
+                'religion'        => 'nullable|string|max:50',
+                'category'        => 'nullable|string|max:50',
+                'blood_group'     => 'nullable|string|max:10',
+                'occupation'      => 'nullable|string|max:100',
+                'annual_income'   => 'nullable|numeric',
+                'previous_school' => 'nullable|string|max:200',
+                'previous_class'  => 'nullable|string|max:50',
+                'admission_date'  => 'required|date',
+                'academic_year_id'=> 'required|exists:academic_years,academic_year_id',
+                'class_id'        => 'required|exists:classes,class_id',
+                'section_id'      => 'required|exists:sections,section_id',
+                'photo'           => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+                'documents.*'     => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            ];
+        }
+
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $validationRules);
+
+        if ($validator->fails()) {
+            if ($isDraft || $request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'error'   => 'Validation failed',
+                    'message' => $validator->errors()->first(),
+                    'errors'  => $validator->errors()
+                ], 422);
+            }
+            return back()->withErrors($validator)->withInput();
+        }
 
         try {
             $data = $request->all();
-            $isDraft = $request->input('save_as_draft') === 'true';
 
             // Handle cropped photo if provided
             if ($request->filled('cropped_photo_data')) {
@@ -182,22 +236,35 @@ class AdmissionController extends Controller
             // Set admission status based on draft flag
             $data['admission_status'] = $isDraft ? Admission::STATUS_DRAFT : Admission::STATUS_SUBMITTED;
 
+            // For drafts, fill in default values for any missing required DB fields
+            if ($isDraft) {
+                $data['dob']           = $data['dob'] ?? now()->subYears(10)->format('Y-m-d');
+                $data['gender']        = $data['gender'] ?? 'MALE';
+                $data['father_name']   = $data['father_name'] ?? 'N/A';
+                $data['mother_name']   = $data['mother_name'] ?? 'N/A';
+                $data['aadhaar_no']    = $data['aadhaar_no'] ?? 'DRAFT_' . time();
+                $data['pen_no']        = $data['pen_no'] ?? 'DPEN_' . time();
+                $data['phone_primary'] = $data['phone_primary'] ?? '0000000000';
+                $data['address']       = $data['address'] ?? 'Draft address';
+                $data['admission_date']= $data['admission_date'] ?? now()->format('Y-m-d');
+            }
+
             $admission = $this->admissionService->createAdmission($data, Auth::id());
 
-            // Return JSON response for AJAX draft save
-            if ($request->expectsJson() || $isDraft) {
+            // Always return JSON for draft saves
+            if ($isDraft || $request->expectsJson()) {
                 return response()->json([
-                    'success' => true,
+                    'success'      => true,
                     'admission_id' => $admission->admission_id,
                     'admission_no' => $admission->student->admission_no,
-                    'status' => $admission->admission_status
+                    'status'       => $admission->admission_status
                 ]);
             }
 
             return redirect()->route('admissions.show', $admission->admission_id)
-                ->with('success', 'Admission created successfully!');
+                ->with('success', 'Admission submitted successfully! Admission No: ' . $admission->student->admission_no);
         } catch (Exception $e) {
-            if ($request->expectsJson()) {
+            if ($isDraft || $request->expectsJson()) {
                 return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
             }
             return back()->withInput()->with('error', $e->getMessage());

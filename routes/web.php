@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\AdmissionController;
+use App\Http\Controllers\AdmissionBulkImportController;
+use App\Http\Controllers\AdmissionPhotoSyncController;
+use App\Http\Controllers\AdmissionTransferController;
 use App\Http\Controllers\PromotionController;
 use App\Http\Controllers\BooksDecisionController;
 use App\Http\Controllers\AcademicYearController;

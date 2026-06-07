@@ -61,20 +61,20 @@
                     
                     @php
                         $statusBadgeClass = match($admission->admission_status) {
-                            Admission::STATUS_ADMITTED => 'bg-success',
-                            Admission::STATUS_APPROVED => 'bg-info',
-                            Admission::STATUS_VERIFIED => 'bg-primary',
-                            Admission::STATUS_SUBMITTED => 'bg-warning text-dark',
-                            Admission::STATUS_DRAFT => 'bg-secondary',
-                            Admission::STATUS_REJECTED => 'bg-danger',
-                            default => 'bg-secondary'
+                            'ADMITTED'          => 'bg-success',
+                            'APPROVED'          => 'bg-info',
+                            'DOCUMENT VERIFIED' => 'bg-primary',
+                            'SUBMITTED'         => 'bg-warning text-dark',
+                            'DRAFT'             => 'bg-secondary',
+                            'REJECTED'          => 'bg-danger',
+                            default             => 'bg-secondary'
                         };
                     @endphp
                     <div class="badge rounded-pill {{ $statusBadgeClass }} px-3 mb-4">{{ $admission->admission_status }}</div>
 
                     <!-- Workflow Action Buttons -->
                     @if(in_array(strtoupper(optional(auth()->user()->role)->role_name ?? ''), ['ADMINISTRATOR', 'ADMIN', 'PRINCIPAL', 'CORRESPONDENT']))
-                        @if(in_array($admission->admission_status, [Admission::STATUS_DRAFT, Admission::STATUS_SUBMITTED]))
+                        @if(in_array($admission->admission_status, ['DRAFT', 'SUBMITTED']))
                             <div class="d-grid mb-2">
                                 <form action="{{ route('admissions.verify', $admission->admission_id) }}" method="POST">
                                     @csrf
@@ -85,7 +85,7 @@
                             </div>
                         @endif
 
-                        @if(in_array($admission->admission_status, [Admission::STATUS_VERIFIED, Admission::STATUS_SUBMITTED]))
+                        @if(in_array($admission->admission_status, ['DOCUMENT VERIFIED', 'SUBMITTED']))
                             <div class="d-grid mb-2">
                                 <form action="{{ route('admissions.approve', $admission->admission_id) }}" method="POST">
                                     @csrf
@@ -96,7 +96,7 @@
                             </div>
                         @endif
 
-                        @if($admission->admission_status === Admission::STATUS_APPROVED)
+                        @if($admission->admission_status === 'APPROVED')
                             <div class="d-grid mb-2">
                                 <form action="{{ route('admissions.admit', $admission->admission_id) }}" method="POST">
                                     @csrf
@@ -107,7 +107,7 @@
                             </div>
                         @endif
 
-                        @if(!in_array($admission->admission_status, [Admission::STATUS_ADMITTED, Admission::STATUS_REJECTED]))
+                        @if(!in_array($admission->admission_status, ['ADMITTED', 'REJECTED']))
                             <div class="d-grid mb-4">
                                 <button class="btn btn-outline-danger w-100 rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#rejectModal">
                                     <i class="bi bi-x-circle me-2"></i> Reject Admission
@@ -436,8 +436,8 @@
                                 </div>
                                 <div>
                                     <div class="small text-muted text-uppercase" style="font-size: 0.65rem;">Admission Date</div>
-                                    <div class="fw-bold">{{ $admission->admission_date ? \Carbon\Carbon::parse($admission->admission_date)->format('d M Y') : '-' }}</div>
-                                    <div class="small text-muted">Created: {{ $admission->created_at ? \Carbon\Carbon::parse($admission->created_at)->format('d M Y, h:i A') : '-' }}</div>
+                                    <div class="fw-bold">{{ optional($admission->student->admission_date ?? $admission->created_at)->format('d M Y') ?? '-' }}</div>
+                                    <div class="small text-muted">Created: {{ $admission->created_at ? $admission->created_at->format('d M Y, h:i A') : '-' }}</div>
                                 </div>
                             </div>
                         </div>

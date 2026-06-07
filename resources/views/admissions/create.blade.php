@@ -56,7 +56,7 @@
         </div>
     @endif
 
-    <form action="{{ route('admissions.store') }}" method="POST" enctype="multipart/form-data">
+    <form action="{{ route('admissions.store') }}" method="POST" enctype="multipart/form-data" id="admission-form">
         @csrf
         
         <div class="row g-4">
@@ -364,37 +364,36 @@
                 </div>
             </div>
         </div>
-    </form>
 
-    <!-- Sticky Action Bar -->
-    <div class="fixed-bottom bg-white border-top shadow-lg" style="z-index: 1000;">
-        <div class="container-fluid py-3">
-            <div class="d-flex justify-content-between align-items-center">
-                <div class="d-flex align-items-center gap-3">
-                    <div id="auto-save-status" class="small text-muted">
-                        <i class="bi bi-cloud me-1"></i> Auto-save enabled
+        <!-- Sticky Action Bar (inside the form so Submit works) -->
+        <div class="fixed-bottom bg-white border-top shadow-lg" style="z-index: 1000;">
+            <div class="container-fluid py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-3">
+                        <div id="auto-save-status" class="small text-muted">
+                            <i class="bi bi-cloud me-1"></i> Auto-save enabled
+                        </div>
                     </div>
-                </div>
-                <div class="d-flex gap-2">
-                    <button type="button" id="reset-btn" class="btn btn-outline-secondary px-4 rounded-pill">
-                        <i class="bi bi-arrow-counterclockwise me-2"></i> Reset
-                    </button>
-                    <button type="button" id="save-draft-btn" class="btn btn-primary px-4 rounded-pill">
-                        <i class="bi bi-save me-2"></i> Save Draft
-                    </button>
-                    <button type="submit" id="submit-btn" class="btn btn-success px-4 rounded-pill">
-                        <i class="bi bi-check-circle me-2"></i> Submit Admission
-                    </button>
+                    <div class="d-flex gap-2">
+                        <button type="button" id="reset-btn" class="btn btn-outline-secondary px-4 rounded-pill">
+                            <i class="bi bi-arrow-counterclockwise me-2"></i> Reset
+                        </button>
+                        <button type="button" id="save-draft-btn" class="btn btn-primary px-4 rounded-pill">
+                            <i class="bi bi-save me-2"></i> Save Draft
+                        </button>
+                        <button type="submit" id="submit-btn" class="btn btn-success px-4 rounded-pill">
+                            <i class="bi bi-check-circle me-2"></i> Submit Admission
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+    </form>
 </div>
 
 @push('scripts')
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
     let cropper;
     let originalImage;
@@ -410,7 +409,7 @@
             'address-info': ['address'],
             'academic-info': ['academic_year_id', 'class_id', 'section_id'],
             'photo': ['photo-input'],
-            'documents': ['documents[PHOTO]', 'documents[BIRTH_CERTIFICATE]', 'documents[TC]', 'documents[STUDENT_AADHAAR]', 'documents[PARENT_AADHAAR]']
+            'documents': ['documents[BIRTH_CERTIFICATE]', 'documents[TC]', 'documents[STUDENT_AADHAAR]', 'documents[PARENT_AADHAAR]', 'documents[OTHER]']
         };
 
         let completed = 0;
@@ -420,27 +419,47 @@
             const fields = sections[section];
             let sectionComplete = false;
 
-            if (section === 'documents') {
-                const docCount = document.querySelectorAll('input[type="file"][name^="documents"]').length;
+            if (section === 'photo') {
+                // Photo is optional — mark complete if uploaded, skip if not
+                const photoInput = document.getElementById('photo-input');
+                const croppedData = document.getElementById('cropped-photo-data');
+                if ((photoInput && photoInput.files.length > 0) || (croppedData && croppedData.value)) {
+                    sectionComplete = true;
+                } else {
+                    // Optional: don't count against total
+                    total--;
+                    return;
+                }
+            } else if (section === 'documents') {
+                // Documents are optional — count how many are uploaded
+                let docCount = 0;
+                document.querySelectorAll('input[type="file"][name^="documents"]').forEach(inp => {
+                    if (inp.files.length > 0) docCount++;
+                });
                 if (docCount > 0) sectionComplete = true;
+                else {
+                    // Optional: don't count against total
+                    total--;
+                    return;
+                }
             } else {
                 fields.forEach(field => {
                     const input = document.querySelector(`[name="${field}"]`);
-                    if (input && input.value) sectionComplete = true;
+                    if (input && input.value.trim()) sectionComplete = true;
                 });
             }
 
             if (sectionComplete) {
                 completed++;
-                document.querySelector(`[data-section="${section}"]`).classList.remove('bg-light', 'text-muted');
-                document.querySelector(`[data-section="${section}"]`).classList.add('bg-success', 'text-white');
+                const badge = document.querySelector(`[data-section="${section}"]`);
+                if (badge) { badge.classList.remove('bg-light', 'text-muted'); badge.classList.add('bg-success', 'text-white'); }
             } else {
-                document.querySelector(`[data-section="${section}"]`).classList.remove('bg-success', 'text-white');
-                document.querySelector(`[data-section="${section}"]`).classList.add('bg-light', 'text-muted');
+                const badge = document.querySelector(`[data-section="${section}"]`);
+                if (badge) { badge.classList.remove('bg-success', 'text-white'); badge.classList.add('bg-light', 'text-muted'); }
             }
         });
 
-        const percentage = Math.round((completed / total) * 100);
+        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
         document.getElementById('completion-bar').style.width = percentage + '%';
         document.getElementById('completion-percentage').textContent = percentage + '%';
     }
@@ -482,199 +501,230 @@
         document.getElementById('doc-count').textContent = count + '/5';
     }
 
-    // Photo input change
-    document.getElementById('photo-input').addEventListener('change', function(e) {
-        const preview = document.getElementById('photo-preview');
-        const cropBtn = document.getElementById('crop-btn');
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                originalImage = e.target.result;
-                preview.innerHTML = `<img src="${e.target.result}" style="width: 100%; height: 100%; object-fit: cover;">`;
-                cropBtn.classList.remove('d-none');
-                updateDocumentStatus('PHOTO', 'uploaded');
-                updateCompletion();
-                hasUnsavedChanges = true;
-            }
-            reader.readAsDataURL(file);
-        }
-    });
-
-    // Document input changes
-    document.querySelectorAll('input[type="file"][name^="documents"]').forEach(input => {
-        input.addEventListener('change', function(e) {
-            const docType = this.name.replace('documents[', '').replace(']', '');
-            if (this.files.length > 0) {
-                updateDocumentStatus(docType, 'uploaded');
-            }
-            updateCompletion();
-            hasUnsavedChanges = true;
-        });
-    });
-
-    // Form input changes
-    document.querySelectorAll('input, select, textarea').forEach(input => {
-        input.addEventListener('change', function() {
-            updateCompletion();
-            hasUnsavedChanges = true;
-        });
-    });
-
-    // Initialize cropper when modal opens
-    document.getElementById('cropModal').addEventListener('shown.bs.modal', function() {
-        const image = document.getElementById('crop-image');
-        image.src = originalImage;
-        cropper = new Cropper(image, {
-            aspectRatio: 1,
-            viewMode: 1,
-            dragMode: 'move',
-            autoCropArea: 0.8,
-            restore: false,
-            guides: true,
-            center: true,
-            highlight: false,
-            cropBoxMovable: true,
-            cropBoxResizable: true,
-            toggleDragModeOnDblclick: false,
-        });
-    });
-
-    // Destroy cropper when modal closes
-    document.getElementById('cropModal').addEventListener('hidden.bs.modal', function() {
-        if (cropper) {
-            cropper.destroy();
-        }
-    });
-
-    // Crop and save
-    document.getElementById('save-crop').addEventListener('click', function() {
-        if (cropper) {
-            const canvas = cropper.getCroppedCanvas({
-                width: 300,
-                height: 300,
-            });
-            const croppedData = canvas.toDataURL('image/jpeg', 0.9);
-            document.getElementById('cropped-photo-data').value = croppedData;
-            document.getElementById('photo-preview').innerHTML = `<img src="${croppedData}" style="width: 100%; height: 100%; object-fit: cover;">`;
-            bootstrap.Modal.getInstance(document.getElementById('cropModal')).hide();
-            hasUnsavedChanges = true;
-        }
-    });
-
-    // Filter sections based on class
-    const classSelect = document.getElementById('class_id');
-    const sectionSelect = document.getElementById('section_id');
-    const sections = Array.from(sectionSelect.options);
-
-    classSelect.addEventListener('change', function() {
-        const classId = this.value;
-        sectionSelect.innerHTML = '<option value="">Select Section</option>';
-
-        sections.forEach(option => {
-            if (option.getAttribute('data-class') === classId) {
-                sectionSelect.appendChild(option.cloneNode(true));
-            }
-        });
-        updateCompletion();
-    });
-
-    // Initial filter if class is selected
-    if (classSelect.value) {
-        classSelect.dispatchEvent(new Event('change'));
-    }
-
     // Save Draft functionality
-    document.getElementById('save-draft-btn').addEventListener('click', function() {
-        const form = document.querySelector('form');
+    function saveDraft() {
+        const form = document.getElementById('admission-form');
         const formData = new FormData(form);
         formData.append('save_as_draft', 'true');
 
-        document.getElementById('auto-save-status').innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Saving...';
+        const statusEl = document.getElementById('auto-save-status');
+        statusEl.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Saving...';
+
+        const draftBtn = document.getElementById('save-draft-btn');
+        draftBtn.disabled = true;
 
         fetch(form.action, {
             method: 'POST',
             body: formData,
             headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json'
             }
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { throw new Error(err.message || err.error || 'Server error'); });
+            }
+            return response.json();
+        })
         .then(data => {
+            draftBtn.disabled = false;
             if (data.success) {
                 admissionId = data.admission_id;
                 document.getElementById('admission-no-display').textContent = 'Admission No: ' + data.admission_no;
-                document.getElementById('auto-save-status').innerHTML = '<i class="bi bi-check-circle me-1"></i> Draft Saved';
+                document.getElementById('admission-status-badge').textContent = 'DRAFT';
+                statusEl.innerHTML = '<i class="bi bi-check-circle text-success me-1"></i> <span class="text-success">Draft Saved</span>';
                 hasUnsavedChanges = false;
 
                 Swal.fire({
                     icon: 'success',
-                    title: 'Draft Saved',
-                    text: `Admission No: ${data.admission_no}\nStatus: DRAFT\nYou may continue editing later.`,
-                    timer: 2000,
-                    showConfirmButton: false
+                    title: 'Draft Saved!',
+                    html: `<b>Admission No:</b> ${data.admission_no}<br><span class="badge bg-secondary">DRAFT</span><br><small class="text-muted">You may continue editing or submit later.</small>`,
+                    timer: 3000,
+                    showConfirmButton: false,
+                    toast: true,
+                    position: 'top-end'
                 });
+            } else {
+                statusEl.innerHTML = '<i class="bi bi-cloud me-1"></i> Auto-save enabled';
+                Swal.fire({ icon: 'error', title: 'Save Failed', text: data.error || 'Could not save draft.' });
             }
         })
         .catch(error => {
-            document.getElementById('auto-save-status').innerHTML = '<i class="bi bi-cloud me-1"></i> Auto-save enabled';
+            draftBtn.disabled = false;
+            statusEl.innerHTML = '<i class="bi bi-cloud me-1"></i> Auto-save enabled';
             Swal.fire({
                 icon: 'error',
-                title: 'Error',
-                text: 'Failed to save draft'
+                title: 'Error Saving Draft',
+                text: error.message || 'Failed to save draft. Check required fields.'
             });
         });
-    });
-
-    // Reset form
-    document.getElementById('reset-btn').addEventListener('click', function() {
-        if (hasUnsavedChanges) {
-            Swal.fire({
-                title: 'Reset Form?',
-                text: 'All unsaved changes will be lost',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#dc3545',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Yes, reset'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    document.querySelector('form').reset();
-                    hasUnsavedChanges = false;
-                    updateCompletion();
-                    // Reset document statuses
-                    ['PHOTO', 'BIRTH_CERTIFICATE', 'TC', 'STUDENT_AADHAAR', 'PARENT_AADHAAR'].forEach(type => {
-                        updateDocumentStatus(type, 'not_uploaded');
-                    });
-                }
-            });
-        } else {
-            document.querySelector('form').reset();
-            updateCompletion();
-        }
-    });
-
-    // Auto-save every 30 seconds
-    function startAutoSave() {
-        autoSaveInterval = setInterval(() => {
-            if (hasUnsavedChanges && admissionId) {
-                document.getElementById('save-draft-btn').click();
-            }
-        }, 30000);
     }
 
-    // Unsaved changes warning
-    window.addEventListener('beforeunload', function(e) {
-        if (hasUnsavedChanges) {
-            e.preventDefault();
-            e.returnValue = '';
-        }
-    });
-
-    // Initialize
     document.addEventListener('DOMContentLoaded', function() {
+        // Photo input change
+        document.getElementById('photo-input').addEventListener('change', function(e) {
+            const preview = document.getElementById('photo-preview');
+            const cropBtn = document.getElementById('crop-btn');
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    originalImage = ev.target.result;
+                    preview.innerHTML = `<img src="${ev.target.result}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                    cropBtn.classList.remove('d-none');
+                    updateDocumentStatus('PHOTO', 'uploaded');
+                    updateCompletion();
+                    hasUnsavedChanges = true;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Document input changes
+        document.querySelectorAll('input[type="file"][name^="documents"]').forEach(input => {
+            input.addEventListener('change', function() {
+                const docType = this.name.replace('documents[', '').replace(']', '');
+                if (this.files.length > 0) {
+                    updateDocumentStatus(docType, 'uploaded');
+                }
+                updateCompletion();
+                hasUnsavedChanges = true;
+            });
+        });
+
+        // Form input changes
+        document.querySelectorAll('input, select, textarea').forEach(input => {
+            input.addEventListener('change', function() {
+                updateCompletion();
+                hasUnsavedChanges = true;
+            });
+            input.addEventListener('input', function() {
+                updateCompletion();
+                hasUnsavedChanges = true;
+            });
+        });
+
+        // Crop modal events (needs DOM ready)
+        const cropModal = document.getElementById('cropModal');
+        if (cropModal) {
+            cropModal.addEventListener('shown.bs.modal', function() {
+                const image = document.getElementById('crop-image');
+                image.src = originalImage;
+                cropper = new Cropper(image, {
+                    aspectRatio: 1,
+                    viewMode: 1,
+                    dragMode: 'move',
+                    autoCropArea: 0.8,
+                    restore: false,
+                    guides: true,
+                    center: true,
+                    highlight: false,
+                    cropBoxMovable: true,
+                    cropBoxResizable: true,
+                    toggleDragModeOnDblclick: false,
+                });
+            });
+
+            cropModal.addEventListener('hidden.bs.modal', function() {
+                if (cropper) { cropper.destroy(); cropper = null; }
+            });
+        }
+
+        // Crop and save
+        const saveCropBtn = document.getElementById('save-crop');
+        if (saveCropBtn) {
+            saveCropBtn.addEventListener('click', function() {
+                if (cropper) {
+                    const canvas = cropper.getCroppedCanvas({ width: 300, height: 300 });
+                    const croppedData = canvas.toDataURL('image/jpeg', 0.9);
+                    document.getElementById('cropped-photo-data').value = croppedData;
+                    document.getElementById('photo-preview').innerHTML = `<img src="${croppedData}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                    bootstrap.Modal.getInstance(cropModal).hide();
+                    hasUnsavedChanges = true;
+                    updateCompletion();
+                }
+            });
+        }
+
+        // Filter sections based on class
+        const classSelect = document.getElementById('class_id');
+        const sectionSelect = document.getElementById('section_id');
+        const allSectionOptions = Array.from(sectionSelect.options);
+
+        classSelect.addEventListener('change', function() {
+            const classId = this.value;
+            sectionSelect.innerHTML = '<option value="">Select Section</option>';
+            allSectionOptions.forEach(option => {
+                if (option.getAttribute('data-class') === classId) {
+                    sectionSelect.appendChild(option.cloneNode(true));
+                }
+            });
+            updateCompletion();
+        });
+
+        if (classSelect.value) {
+            classSelect.dispatchEvent(new Event('change'));
+        }
+
+        // Save Draft button
+        document.getElementById('save-draft-btn').addEventListener('click', saveDraft);
+
+        // Submit form: set action flag
+        document.getElementById('admission-form').addEventListener('submit', function(e) {
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i> Submitting...';
+            // Let form submit normally (not as draft)
+        });
+
+        // Reset form
+        document.getElementById('reset-btn').addEventListener('click', function() {
+            if (hasUnsavedChanges) {
+                Swal.fire({
+                    title: 'Reset Form?',
+                    text: 'All unsaved changes will be lost',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Yes, reset'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        document.getElementById('admission-form').reset();
+                        document.getElementById('photo-preview').innerHTML = '<i class="bi bi-person text-muted display-4"></i>';
+                        document.getElementById('crop-btn').classList.add('d-none');
+                        hasUnsavedChanges = false;
+                        updateCompletion();
+                        ['PHOTO', 'BIRTH_CERTIFICATE', 'TC', 'STUDENT_AADHAAR', 'PARENT_AADHAAR'].forEach(type => {
+                            updateDocumentStatus(type, 'not_uploaded');
+                        });
+                    }
+                });
+            } else {
+                document.getElementById('admission-form').reset();
+                document.getElementById('photo-preview').innerHTML = '<i class="bi bi-person text-muted display-4"></i>';
+                document.getElementById('crop-btn').classList.add('d-none');
+                updateCompletion();
+            }
+        });
+
+        // Auto-save every 30 seconds (only after first draft save)
+        autoSaveInterval = setInterval(() => {
+            if (hasUnsavedChanges && admissionId) {
+                saveDraft();
+            }
+        }, 30000);
+
+        // Unsaved changes warning
+        window.addEventListener('beforeunload', function(e) {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+
         updateCompletion();
-        startAutoSave();
     });
 </script>
 @endpush
