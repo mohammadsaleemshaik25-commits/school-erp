@@ -166,6 +166,7 @@ class AdmissionController extends Controller
 
         try {
             $data = $request->all();
+            $isDraft = $request->input('save_as_draft') === 'true';
 
             // Handle cropped photo if provided
             if ($request->filled('cropped_photo_data')) {
@@ -178,10 +179,27 @@ class AdmissionController extends Controller
                 unset($data['photo']); // Don't use original file
             }
 
+            // Set admission status based on draft flag
+            $data['admission_status'] = $isDraft ? Admission::STATUS_DRAFT : Admission::STATUS_SUBMITTED;
+
             $admission = $this->admissionService->createAdmission($data, Auth::id());
+
+            // Return JSON response for AJAX draft save
+            if ($request->expectsJson() || $isDraft) {
+                return response()->json([
+                    'success' => true,
+                    'admission_id' => $admission->admission_id,
+                    'admission_no' => $admission->student->admission_no,
+                    'status' => $admission->admission_status
+                ]);
+            }
+
             return redirect()->route('admissions.show', $admission->admission_id)
                 ->with('success', 'Admission created successfully!');
         } catch (Exception $e) {
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+            }
             return back()->withInput()->with('error', $e->getMessage());
         }
     }

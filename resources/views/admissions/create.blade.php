@@ -3,12 +3,39 @@
 @section('title', 'New Admission')
 
 @section('content')
-<div class="container-fluid">
+<div class="container-fluid pb-5">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h3 mb-0 fw-bold text-dark">New Admission Form</h1>
+        <div>
+            <h1 class="h3 mb-0 fw-bold text-dark">New Admission Form</h1>
+            <div class="d-flex align-items-center gap-2 mt-1">
+                <span id="admission-status-badge" class="badge bg-secondary rounded-pill px-3 small">DRAFT</span>
+                <span id="admission-no-display" class="text-muted small">Admission No: --</span>
+            </div>
+        </div>
         <a href="{{ route('admissions.index') }}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill">
             <i class="bi bi-arrow-left me-2"></i> Back to List
         </a>
+    </div>
+
+    <!-- Form Completion Progress Bar -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="small fw-bold text-muted">Form Completion</span>
+                <span id="completion-percentage" class="small fw-bold text-primary">0%</span>
+            </div>
+            <div class="progress" style="height: 8px;">
+                <div id="completion-bar" class="progress-bar bg-primary" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-2" id="completion-items">
+                <span class="badge bg-light text-muted small" data-section="student-info">Student Information</span>
+                <span class="badge bg-light text-muted small" data-section="parent-info">Parent Information</span>
+                <span class="badge bg-light text-muted small" data-section="address-info">Address Information</span>
+                <span class="badge bg-light text-muted small" data-section="academic-info">Academic Information</span>
+                <span class="badge bg-light text-muted small" data-section="photo">Photo Uploaded</span>
+                <span class="badge bg-light text-muted small" data-section="documents">Documents <span id="doc-count">0/5</span></span>
+            </div>
+        </div>
     </div>
 
     @if($errors->any())
@@ -271,51 +298,191 @@
                     </div>
                     <div class="card-body p-4">
                         <div class="mb-3">
-                            <label class="form-label small fw-bold text-muted text-uppercase">Aadhaar Card</label>
-                            <input type="file" name="documents[AADHAAR]" class="form-control">
-                        </div>
-                        <div class="mb-3">
                             <label class="form-label small fw-bold text-muted text-uppercase">Birth Certificate</label>
-                            <input type="file" name="documents[BIRTH_CERTIFICATE]" class="form-control">
+                            <input type="file" name="documents[BIRTH_CERTIFICATE]" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
                         </div>
                         <div class="mb-3">
                             <label class="form-label small fw-bold text-muted text-uppercase">Transfer Certificate (TC)</label>
-                            <input type="file" name="documents[TC]" class="form-control">
+                            <input type="file" name="documents[TC]" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Student Aadhaar</label>
+                            <input type="file" name="documents[STUDENT_AADHAAR]" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Parent Aadhaar</label>
+                            <input type="file" name="documents[PARENT_AADHAAR]" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
                         </div>
                         <div class="mb-0">
                             <label class="form-label small fw-bold text-muted text-uppercase">Other Document</label>
-                            <input type="file" name="documents[OTHER]" class="form-control">
+                            <input type="file" name="documents[OTHER]" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                        </div>
+                        <div class="small text-muted mt-3">
+                            <i class="bi bi-info-circle me-1"></i> Accepted formats: PDF, JPG, PNG (Max 2MB each)
                         </div>
                     </div>
                 </div>
 
-                <div class="card border-0 shadow-sm rounded-4 bg-primary text-white">
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-header bg-white py-3 border-bottom">
+                        <h5 class="m-0 fw-bold text-dark"><i class="bi bi-file-earmark-text me-2 text-primary"></i> Document Status</h5>
+                    </div>
                     <div class="card-body p-4">
-                        <h6 class="fw-bold mb-3">Admission Process</h6>
-                        <p class="small opacity-75 mb-4">By submitting this form, you will automatically create:</p>
-                        <ul class="small opacity-75 mb-4 ps-3">
-                            <li>Student Profile</li>
-                            <li>Current Enrollment</li>
-                            <li>Fee Ledger Account</li>
-                            <li>Admission Record</li>
-                        </ul>
-                        <button type="submit" class="btn btn-white w-100 fw-bold text-primary py-3 rounded-3 shadow-sm">
-                            <i class="bi bi-check-circle-fill me-2"></i> Confirm Admission
-                        </button>
+                        <div class="d-flex flex-column gap-3">
+                            <div class="d-flex justify-content-between align-items-center" data-doc-type="PHOTO">
+                                <span class="small fw-bold">Photo</span>
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill small" id="doc-status-PHOTO">
+                                    <i class="bi bi-dash-circle me-1"></i> Not Uploaded
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center" data-doc-type="BIRTH_CERTIFICATE">
+                                <span class="small fw-bold">Birth Certificate</span>
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill small" id="doc-status-BIRTH_CERTIFICATE">
+                                    <i class="bi bi-dash-circle me-1"></i> Not Uploaded
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center" data-doc-type="TC">
+                                <span class="small fw-bold">Transfer Certificate</span>
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill small" id="doc-status-TC">
+                                    <i class="bi bi-dash-circle me-1"></i> Not Uploaded
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center" data-doc-type="STUDENT_AADHAAR">
+                                <span class="small fw-bold">Student Aadhaar</span>
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill small" id="doc-status-STUDENT_AADHAAR">
+                                    <i class="bi bi-dash-circle me-1"></i> Not Uploaded
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center" data-doc-type="PARENT_AADHAAR">
+                                <span class="small fw-bold">Parent Aadhaar</span>
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill small" id="doc-status-PARENT_AADHAAR">
+                                    <i class="bi bi-dash-circle me-1"></i> Not Uploaded
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </form>
+
+    <!-- Sticky Action Bar -->
+    <div class="fixed-bottom bg-white border-top shadow-lg" style="z-index: 1000;">
+        <div class="container-fluid py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-3">
+                    <div id="auto-save-status" class="small text-muted">
+                        <i class="bi bi-cloud me-1"></i> Auto-save enabled
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" id="reset-btn" class="btn btn-outline-secondary px-4 rounded-pill">
+                        <i class="bi bi-arrow-counterclockwise me-2"></i> Reset
+                    </button>
+                    <button type="button" id="save-draft-btn" class="btn btn-primary px-4 rounded-pill">
+                        <i class="bi bi-save me-2"></i> Save Draft
+                    </button>
+                    <button type="submit" id="submit-btn" class="btn btn-success px-4 rounded-pill">
+                        <i class="bi bi-check-circle me-2"></i> Submit Admission
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 @push('scripts')
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
     let cropper;
     let originalImage;
+    let hasUnsavedChanges = false;
+    let autoSaveInterval;
+    let admissionId = null;
 
+    // Form completion tracking
+    function updateCompletion() {
+        const sections = {
+            'student-info': ['student_name', 'dob', 'gender'],
+            'parent-info': ['father_name', 'mother_name', 'phone_primary'],
+            'address-info': ['address'],
+            'academic-info': ['academic_year_id', 'class_id', 'section_id'],
+            'photo': ['photo-input'],
+            'documents': ['documents[PHOTO]', 'documents[BIRTH_CERTIFICATE]', 'documents[TC]', 'documents[STUDENT_AADHAAR]', 'documents[PARENT_AADHAAR]']
+        };
+
+        let completed = 0;
+        let total = Object.keys(sections).length;
+
+        Object.keys(sections).forEach(section => {
+            const fields = sections[section];
+            let sectionComplete = false;
+
+            if (section === 'documents') {
+                const docCount = document.querySelectorAll('input[type="file"][name^="documents"]').length;
+                if (docCount > 0) sectionComplete = true;
+            } else {
+                fields.forEach(field => {
+                    const input = document.querySelector(`[name="${field}"]`);
+                    if (input && input.value) sectionComplete = true;
+                });
+            }
+
+            if (sectionComplete) {
+                completed++;
+                document.querySelector(`[data-section="${section}"]`).classList.remove('bg-light', 'text-muted');
+                document.querySelector(`[data-section="${section}"]`).classList.add('bg-success', 'text-white');
+            } else {
+                document.querySelector(`[data-section="${section}"]`).classList.remove('bg-success', 'text-white');
+                document.querySelector(`[data-section="${section}"]`).classList.add('bg-light', 'text-muted');
+            }
+        });
+
+        const percentage = Math.round((completed / total) * 100);
+        document.getElementById('completion-bar').style.width = percentage + '%';
+        document.getElementById('completion-percentage').textContent = percentage + '%';
+    }
+
+    // Document status tracking
+    function updateDocumentStatus(docType, status) {
+        const statusEl = document.getElementById(`doc-status-${docType}`);
+        if (!statusEl) return;
+
+        statusEl.className = 'badge rounded-pill small';
+
+        switch(status) {
+            case 'uploaded':
+                statusEl.classList.add('bg-info', 'bg-opacity-10', 'text-info', 'border', 'border-info', 'border-opacity-25');
+                statusEl.innerHTML = '<i class="bi bi-cloud-upload me-1"></i> Uploaded';
+                break;
+            case 'verified':
+                statusEl.classList.add('bg-success', 'bg-opacity-10', 'text-success', 'border', 'border-success', 'border-opacity-25');
+                statusEl.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Verified';
+                break;
+            case 'missing':
+                statusEl.classList.add('bg-danger', 'bg-opacity-10', 'text-danger', 'border', 'border-danger', 'border-opacity-25');
+                statusEl.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i> Missing';
+                break;
+            default:
+                statusEl.classList.add('bg-secondary', 'bg-opacity-10', 'text-secondary', 'border', 'border-secondary', 'border-opacity-25');
+                statusEl.innerHTML = '<i class="bi bi-dash-circle me-1"></i> Not Uploaded';
+        }
+
+        updateDocCount();
+    }
+
+    function updateDocCount() {
+        const docInputs = document.querySelectorAll('input[type="file"][name^="documents"]');
+        let count = 0;
+        docInputs.forEach(input => {
+            if (input.files.length > 0) count++;
+        });
+        document.getElementById('doc-count').textContent = count + '/5';
+    }
+
+    // Photo input change
     document.getElementById('photo-input').addEventListener('change', function(e) {
         const preview = document.getElementById('photo-preview');
         const cropBtn = document.getElementById('crop-btn');
@@ -326,9 +493,32 @@
                 originalImage = e.target.result;
                 preview.innerHTML = `<img src="${e.target.result}" style="width: 100%; height: 100%; object-fit: cover;">`;
                 cropBtn.classList.remove('d-none');
+                updateDocumentStatus('PHOTO', 'uploaded');
+                updateCompletion();
+                hasUnsavedChanges = true;
             }
             reader.readAsDataURL(file);
         }
+    });
+
+    // Document input changes
+    document.querySelectorAll('input[type="file"][name^="documents"]').forEach(input => {
+        input.addEventListener('change', function(e) {
+            const docType = this.name.replace('documents[', '').replace(']', '');
+            if (this.files.length > 0) {
+                updateDocumentStatus(docType, 'uploaded');
+            }
+            updateCompletion();
+            hasUnsavedChanges = true;
+        });
+    });
+
+    // Form input changes
+    document.querySelectorAll('input, select, textarea').forEach(input => {
+        input.addEventListener('change', function() {
+            updateCompletion();
+            hasUnsavedChanges = true;
+        });
     });
 
     // Initialize cropper when modal opens
@@ -368,6 +558,7 @@
             document.getElementById('cropped-photo-data').value = croppedData;
             document.getElementById('photo-preview').innerHTML = `<img src="${croppedData}" style="width: 100%; height: 100%; object-fit: cover;">`;
             bootstrap.Modal.getInstance(document.getElementById('cropModal')).hide();
+            hasUnsavedChanges = true;
         }
     });
 
@@ -385,12 +576,106 @@
                 sectionSelect.appendChild(option.cloneNode(true));
             }
         });
+        updateCompletion();
     });
 
     // Initial filter if class is selected
     if (classSelect.value) {
         classSelect.dispatchEvent(new Event('change'));
     }
+
+    // Save Draft functionality
+    document.getElementById('save-draft-btn').addEventListener('click', function() {
+        const form = document.querySelector('form');
+        const formData = new FormData(form);
+        formData.append('save_as_draft', 'true');
+
+        document.getElementById('auto-save-status').innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Saving...';
+
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                admissionId = data.admission_id;
+                document.getElementById('admission-no-display').textContent = 'Admission No: ' + data.admission_no;
+                document.getElementById('auto-save-status').innerHTML = '<i class="bi bi-check-circle me-1"></i> Draft Saved';
+                hasUnsavedChanges = false;
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Draft Saved',
+                    text: `Admission No: ${data.admission_no}\nStatus: DRAFT\nYou may continue editing later.`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            }
+        })
+        .catch(error => {
+            document.getElementById('auto-save-status').innerHTML = '<i class="bi bi-cloud me-1"></i> Auto-save enabled';
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Failed to save draft'
+            });
+        });
+    });
+
+    // Reset form
+    document.getElementById('reset-btn').addEventListener('click', function() {
+        if (hasUnsavedChanges) {
+            Swal.fire({
+                title: 'Reset Form?',
+                text: 'All unsaved changes will be lost',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, reset'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.querySelector('form').reset();
+                    hasUnsavedChanges = false;
+                    updateCompletion();
+                    // Reset document statuses
+                    ['PHOTO', 'BIRTH_CERTIFICATE', 'TC', 'STUDENT_AADHAAR', 'PARENT_AADHAAR'].forEach(type => {
+                        updateDocumentStatus(type, 'not_uploaded');
+                    });
+                }
+            });
+        } else {
+            document.querySelector('form').reset();
+            updateCompletion();
+        }
+    });
+
+    // Auto-save every 30 seconds
+    function startAutoSave() {
+        autoSaveInterval = setInterval(() => {
+            if (hasUnsavedChanges && admissionId) {
+                document.getElementById('save-draft-btn').click();
+            }
+        }, 30000);
+    }
+
+    // Unsaved changes warning
+    window.addEventListener('beforeunload', function(e) {
+        if (hasUnsavedChanges) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        updateCompletion();
+        startAutoSave();
+    });
 </script>
 @endpush
 
