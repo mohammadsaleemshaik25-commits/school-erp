@@ -169,7 +169,7 @@ class AdmissionBulkImportController extends Controller
         return $errors;
     }
 
-    public function confirm(Request $request)
+    public function confirm(Request $request, \App\Services\AdmissionService $admissionService)
     {
         $data = session('bulk_import_data');
         if (!$data) return redirect()->route('admissions.bulk.index')->with('error', 'No data to import.');
@@ -191,7 +191,7 @@ class AdmissionBulkImportController extends Controller
                     ->first();
 
                 // Generate Admission No
-                $admissionNo = 'ADM' . date('Y') . str_pad(Student::count() + 1, 4, '0', STR_PAD_LEFT);
+                $admissionNo = $admissionService->generateAdmissionNumber();
 
                 // Handle photo mapping
                 $photoPath = null;

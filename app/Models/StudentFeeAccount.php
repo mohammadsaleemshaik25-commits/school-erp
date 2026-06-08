@@ -209,6 +209,10 @@ class StudentFeeAccount extends Model
 
     public function getTotalPaidAttribute(): float
     {
+        if (array_key_exists('payments_sum_amount', $this->attributes)) {
+            return (float) $this->attributes['payments_sum_amount'];
+        }
+
         return (float) $this->payments()
             ->where('status', 'SUCCESS')
             ->sum('amount');
@@ -230,9 +234,14 @@ class StudentFeeAccount extends Model
         if ($this->status === 'CLOSED' || $this->status === 'PAID') {
             return 0.00;
         }
-        $booksPaid = (float) $this->payments()
-            ->where('status', 'SUCCESS')
-            ->sum('books_fee_paid');
+
+        if (array_key_exists('payments_sum_books_fee_paid', $this->attributes)) {
+            $booksPaid = (float) $this->attributes['payments_sum_books_fee_paid'];
+        } else {
+            $booksPaid = (float) $this->payments()
+                ->where('status', 'SUCCESS')
+                ->sum('books_fee_paid');
+        }
 
         return max(0.00, (float) $this->books_fee_applied - $booksPaid);
     }
@@ -242,9 +251,14 @@ class StudentFeeAccount extends Model
         if ($this->status === 'CLOSED' || $this->status === 'PAID') {
             return 0.00;
         }
-        $tuitionPaid = (float) $this->payments()
-            ->where('status', 'SUCCESS')
-            ->sum('tuition_fee_paid');
+
+        if (array_key_exists('payments_sum_tuition_fee_paid', $this->attributes)) {
+            $tuitionPaid = (float) $this->attributes['payments_sum_tuition_fee_paid'];
+        } else {
+            $tuitionPaid = (float) $this->payments()
+                ->where('status', 'SUCCESS')
+                ->sum('tuition_fee_paid');
+        }
 
         // Note: total_due already subtracts discounts/waivers from (tuition + books + prev)
         // For simplicity in reporting, we treat tuition due as final_tuition_fee + previous_balance - discounts

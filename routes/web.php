@@ -153,8 +153,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/daily-collection', [ReportController::class, 'dailyCollection'])->name('reports.daily');
         Route::get('/fees/reports/outstanding', [ReportController::class, 'outstandingFees'])->name('fees.reports.outstanding');
 
-        Route::get('/promotions', [PromotionController::class, 'index'])->name('promotions.index');
-        Route::post('/promotions', [PromotionController::class, 'store'])->name('promotions.store');
+
 
         Route::get('/students-export/excel', [StudentExportController::class, 'studentsExcel']);
         Route::get('/students-export/pdf', [StudentExportController::class, 'studentsPdf']);

@@ -6,13 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class AcademicYear extends Model
 {
-    public const UPDATED_AT = null;
-
     protected $table = 'academic_years';
 
     protected $primaryKey = 'academic_year_id';
 
-    public $timestamps = true;
+    public $timestamps = false;
 
     protected $fillable = [
         'year_name',

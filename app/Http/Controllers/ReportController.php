@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Payment;
+use App\Models\Student;
 use App\Models\StudentFeeAccount;
 use App\Models\ClassRoom;
 use App\Models\AcademicYear;
@@ -100,10 +101,17 @@ class ReportController extends Controller
     public function pendingFeeReport(): View
     {
         $accounts = StudentFeeAccount::with('student')
-            ->get()
-            ->filter(function($account) {
-                return $account->remaining_balance > 0;
-            });
+            ->withSum(['payments as payments_sum_amount' => fn($q) => $q->where('status', 'SUCCESS')], 'amount')
+            ->whereNotIn('status', ['CLOSED', 'PAID'])
+            ->where(function ($query) {
+                $query->whereRaw('total_due > (
+                    SELECT COALESCE(SUM(amount), 0) 
+                    FROM payments 
+                    WHERE payments.account_id = student_fee_accounts.account_id 
+                      AND payments.status = "SUCCESS"
+                )');
+            })
+            ->get();
 
         return view('reports.pending-fees', compact('accounts'));
     }
@@ -144,6 +152,18 @@ class ReportController extends Controller
         $selectedClassId = $request->get('class_id');
 
         $query = StudentFeeAccount::with(['student', 'academicYear', 'enrollment.classRoom', 'enrollment.section'])
+            ->withSum(['payments as payments_sum_amount' => fn($q) => $q->where('status', 'SUCCESS')], 'amount')
+            ->withSum(['payments as payments_sum_books_fee_paid' => fn($q) => $q->where('status', 'SUCCESS')], 'books_fee_paid')
+            ->withSum(['payments as payments_sum_tuition_fee_paid' => fn($q) => $q->where('status', 'SUCCESS')], 'tuition_fee_paid')
+            ->whereNotIn('status', ['CLOSED', 'PAID'])
+            ->where(function ($q) {
+                $q->whereRaw('total_due > (
+                    SELECT COALESCE(SUM(amount), 0)
+                    FROM payments
+                    WHERE payments.account_id = student_fee_accounts.account_id
+                      AND payments.status = "SUCCESS"
+                )');
+            })
             ->whereHas('enrollment', function($q) use ($selectedYearId, $selectedClassId) {
                 $q->where('academic_year_id', $selectedYearId);
                 if ($selectedClassId) {
@@ -183,9 +203,7 @@ class ReportController extends Controller
         }
 
         // Fetch all matching accounts to calculate summary stats
-        $allMatchingAccounts = $query->get()->filter(function ($account) {
-            return (float)$account->remaining_balance > 0;
-        });
+        $allMatchingAccounts = $query->get();
 
         $summary = [
             'total_students_with_due' => $allMatchingAccounts->count(),

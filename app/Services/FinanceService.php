@@ -508,14 +508,20 @@ class FinanceService
             return $receipt;
         });
     }
-    protected function generateReceiptNumber(): string
-{
-    $lastReceipt = \App\Models\Receipt::orderByDesc('receipt_id')->first();
+    protected function generateReceiptNumber(?\App\Models\AcademicYear $academicYear = null): string
+    {
+        $lastReceipt = \App\Models\Receipt::lockForUpdate()
+            ->orderByDesc('receipt_id')
+            ->first();
 
-    $nextId = $lastReceipt
-        ? ($lastReceipt->receipt_id + 1)
-        : 1;
+        $nextId = $lastReceipt
+            ? ($lastReceipt->receipt_id + 1)
+            : 1;
 
-    return 'RCP-' . date('Y') . '-' . str_pad($nextId, 6, '0', STR_PAD_LEFT);
-}
+        $year = $academicYear && $academicYear->start_date
+            ? date('Y', strtotime($academicYear->start_date))
+            : date('Y');
+
+        return 'RCP-' . $year . '-' . str_pad($nextId, 6, '0', STR_PAD_LEFT);
+    }
 }

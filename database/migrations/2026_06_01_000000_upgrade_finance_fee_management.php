@@ -27,7 +27,9 @@ return new class extends Migration
             });
         }
 
-        DB::statement('ALTER TABLE student_fee_accounts MODIFY waived_by BIGINT NULL');
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement('ALTER TABLE student_fee_accounts MODIFY waived_by BIGINT NULL');
+        }
 
         if (! Schema::hasColumn('student_fee_accounts', 'waived_date')) {
             Schema::table('student_fee_accounts', function (Blueprint $table) {
@@ -51,15 +53,21 @@ return new class extends Migration
             });
         }
 
-        DB::statement('ALTER TABLE student_fee_adjustments MODIFY approved_by BIGINT NULL');
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement('ALTER TABLE student_fee_adjustments MODIFY approved_by BIGINT NULL');
+        }
 
-        if (! Schema::hasColumn('student_fee_adjustments', 'requested_by')) {
+        if (! Schema::hasColumn('student_fee_adjustments', 'approval_status')) {
             Schema::table('student_fee_adjustments', function (Blueprint $table) {
-                $table->bigInteger('requested_by')->nullable()->after('reason');
+                if (! Schema::hasColumn('student_fee_adjustments', 'requested_by')) {
+                    $table->bigInteger('requested_by')->nullable()->after('reason');
+                }
                 $table->string('approval_status', 20)->default('APPROVED')->after('approved_by');
                 $table->timestamp('approved_at')->nullable()->after('approval_status');
                 $table->text('rejection_reason')->nullable()->after('approved_at');
-                $table->foreign('requested_by')->references('user_id')->on('users');
+                if (! Schema::hasColumn('student_fee_adjustments', 'requested_by')) {
+                    $table->foreign('requested_by')->references('user_id')->on('users');
+                }
             });
         }
 
@@ -78,7 +86,9 @@ return new class extends Migration
             $table->dropColumn(['requested_by', 'approval_status', 'approved_at', 'rejection_reason']);
         });
 
-        DB::statement('ALTER TABLE student_fee_adjustments MODIFY approved_by BIGINT NOT NULL');
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement('ALTER TABLE student_fee_adjustments MODIFY approved_by BIGINT NOT NULL');
+        }
 
         Schema::table('payments', function (Blueprint $table) {
             $table->dropColumn(['books_fee_paid', 'tuition_fee_paid']);

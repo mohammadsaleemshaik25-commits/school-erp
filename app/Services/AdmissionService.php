@@ -519,9 +519,10 @@ class AdmissionService
     /**
      * Generate unique Admission Number (ADM001, ADM002, ...).
      */
-    protected function generateAdmissionNumber(): string
+    public function generateAdmissionNumber(): string
     {
         $lastStudent = Student::where('admission_no', 'LIKE', 'ADM%')
+            ->lockForUpdate()
             ->orderBy('admission_no', 'desc')
             ->first();
 
