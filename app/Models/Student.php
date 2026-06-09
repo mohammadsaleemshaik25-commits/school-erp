@@ -39,6 +39,7 @@ class Student extends Model
         'admission_date',
         'status',
         'photo_path',
+        'admission_type',
     ];
 
     protected $casts = [

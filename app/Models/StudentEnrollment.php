@@ -48,4 +48,19 @@ class StudentEnrollment extends Model
     {
         return $this->hasOne(StudentFeeAccount::class, 'enrollment_id', 'enrollment_id');
     }
+
+    public function feeComponentAccounts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(StudentFeeComponentAccount::class, 'enrollment_id', 'enrollment_id');
+    }
+
+    public function feeComponentSelections(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(StudentFeeComponentSelection::class, 'enrollment_id', 'enrollment_id');
+    }
+
+    public function feeWaivers(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(FeeWaiver::class, 'enrollment_id', 'enrollment_id');
+    }
 }

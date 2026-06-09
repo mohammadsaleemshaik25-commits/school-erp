@@ -73,10 +73,9 @@ class ReceiptController extends Controller
     /**
      * Renders standard receipt or thermal printable formats (80mm)
      */
-    public function show(int $receiptId): View
+    public function show(Receipt $receipt): View
     {
-        $receipt = Receipt::with('payment.feeAccount.enrollment.student', 'payment.feeAccount.enrollment.academicYear', 'payment.collector')
-            ->findOrFail($receiptId);
+        $receipt->load('payment.feeAccount.enrollment.student', 'payment.feeAccount.enrollment.academicYear', 'payment.collector', 'details');
 
         // Check if thermal request flag is active
         if (request()->has('print_format') && request()->get('print_format') === 'thermal') {
@@ -89,13 +88,13 @@ class ReceiptController extends Controller
     /**
      * Handle receipt reprinting
      */
-    public function reprint(int $receiptId)
+    public function reprint(Receipt $receipt)
     {
         try {
-            $this->financeService->reprintReceipt($receiptId, auth()->id());
+            $this->financeService->reprintReceipt($receipt->receipt_id, auth()->id());
             
             return redirect()
-                ->route('fees.receipts.show', $receiptId)
+                ->route('fees.receipts.show', $receipt->receipt_id)
                 ->with('success', 'Receipt marked for duplicate printing.');
         } catch (\Exception $e) {
             return redirect()

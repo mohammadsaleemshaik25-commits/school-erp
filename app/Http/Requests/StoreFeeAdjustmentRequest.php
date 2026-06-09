@@ -18,6 +18,7 @@ class StoreFeeAdjustmentRequest extends FormRequest
     {
         return [
             'account_id'      => 'required|exists:student_fee_accounts,account_id',
+            'component_id'    => 'nullable|exists:fee_components,component_id',
             'adjustment_type' => 'required|in:CONCESSION,WAIVER',
             'discount_amount' => 'required_without:discount_percent|nullable|numeric|min:0',
             'discount_percent' => 'required_without:discount_amount|nullable|numeric|min:0|max:100',

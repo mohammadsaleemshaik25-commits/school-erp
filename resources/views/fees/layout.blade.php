@@ -95,19 +95,14 @@
                     <span class="fw-semibold">Dashboard</span>
                 </a>
                 
-                <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('fees.collect') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('fees.collect') }}">
+                <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('fees-collection.*') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('fees-collection.index') }}">
                     <i class="bi bi-cash-stack me-3 fs-5"></i>
-                    <span class="fw-semibold">Collect Fee</span>
+                    <span class="fw-semibold">Fee Collection</span>
                 </a>
 
                 <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('fees.receipts.index') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('fees.receipts.index') }}">
                     <i class="bi bi-receipt me-3 fs-5"></i>
                     <span class="fw-semibold">Receipts</span>
-                </a>
-
-                <a class="nav-link rounded-3 mb-2 d-flex align-items-center {{ request()->routeIs('books.*') ? 'active bg-primary text-white shadow-sm' : 'text-secondary' }}" href="{{ route('books.index') }}">
-                    <i class="bi bi-book me-3 fs-5"></i>
-                    <span class="fw-semibold">Books Decision</span>
                 </a>
 
                 @if(in_array($role, ['ADMINISTRATOR', 'ADMIN', 'PRINCIPAL', 'CORRESPONDENT']))
@@ -201,6 +196,12 @@
                                     <div class="fw-bold text-danger" id="modal_current_due">₹0</div>
                                 </div>
                             </div>
+                            <div class="col-md-12" id="modal_component_container">
+                                <label class="form-label small fw-bold text-muted text-uppercase">Component (Optional)</label>
+                                <select name="component_id" id="modal_component_id" class="form-select border-primary shadow-none">
+                                    <option value="">-- Overall Tuition / Legacy --</option>
+                                </select>
+                            </div>
                             <div class="col-md-12">
                                 <label class="form-label small fw-bold text-muted text-uppercase">Adjustment Type <span class="text-danger">*</span></label>
                                 <select name="adjustment_type" class="form-select border-primary shadow-none" required>
@@ -268,6 +269,21 @@
             $('#modal_tuition_fee').text('₹' + parseFloat(data.tuition_fee).toLocaleString());
             $('#modal_current_due').text('₹' + parseFloat(data.current_due).toLocaleString());
             window.currentTuitionFee = parseFloat(data.tuition_fee);
+            window.currentBaseFee = window.currentTuitionFee;
+
+            const compSelect = $('#modal_component_id');
+            compSelect.html('<option value="">-- Overall Tuition / Legacy --</option>');
+            if (data.components && data.components.length > 0) {
+                $('#modal_component_container').removeClass('d-none');
+                data.components.forEach(c => {
+                    if (parseFloat(c.balance) > 0) {
+                        compSelect.append(`<option value="${c.id}" data-balance="${c.balance}" data-amount="${c.amount}">${c.name} (Due: ₹${parseFloat(c.balance).toLocaleString()})</option>`);
+                    }
+                });
+            } else {
+                $('#modal_component_container').addClass('d-none');
+            }
+
             $('#modal_discount_percent').val('');
             $('#modal_discount_amount').val('');
             $('[name="reason"]').val('');
@@ -275,10 +291,24 @@
         }
 
         $(document).ready(function() {
+            $('#modal_component_id').on('change', function() {
+                const selected = $(this).find('option:selected');
+                const compAmount = parseFloat(selected.data('amount'));
+                if (!isNaN(compAmount)) {
+                    window.currentBaseFee = compAmount;
+                } else {
+                    window.currentBaseFee = window.currentTuitionFee;
+                }
+                const percent = parseFloat($('#modal_discount_percent').val());
+                if (!isNaN(percent) && window.currentBaseFee > 0) {
+                    $('#modal_discount_amount').val((window.currentBaseFee * percent / 100).toFixed(2));
+                }
+            });
+
             $('#modal_discount_percent').on('input', function() {
                 const percent = parseFloat($(this).val());
-                if (!isNaN(percent) && window.currentTuitionFee > 0) {
-                    $('#modal_discount_amount').val((window.currentTuitionFee * percent / 100).toFixed(2));
+                if (!isNaN(percent) && window.currentBaseFee > 0) {
+                    $('#modal_discount_amount').val((window.currentBaseFee * percent / 100).toFixed(2));
                 } else {
                     $('#modal_discount_amount').val('');
                 }
@@ -286,8 +316,8 @@
 
             $('#modal_discount_amount').on('input', function() {
                 const amount = parseFloat($(this).val());
-                if (!isNaN(amount) && window.currentTuitionFee > 0) {
-                    $('#modal_discount_percent').val((amount / window.currentTuitionFee * 100).toFixed(2));
+                if (!isNaN(amount) && window.currentBaseFee > 0) {
+                    $('#modal_discount_percent').val((amount / window.currentBaseFee * 100).toFixed(2));
                 } else {
                     $('#modal_discount_percent').val('');
                 }

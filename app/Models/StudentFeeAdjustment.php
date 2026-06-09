@@ -13,6 +13,7 @@ class StudentFeeAdjustment extends Model
 
     protected $fillable = [
         'account_id',
+        'component_id',
         'adjustment_type',
         'discount_percent',
         'discount_amount',
@@ -33,6 +34,11 @@ class StudentFeeAdjustment extends Model
     public function feeAccount(): BelongsTo
     {
         return $this->belongsTo(StudentFeeAccount::class, 'account_id', 'account_id');
+    }
+
+    public function component(): BelongsTo
+    {
+        return $this->belongsTo(FeeComponent::class, 'component_id', 'component_id');
     }
 
     public function requester(): BelongsTo

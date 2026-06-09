@@ -15,6 +15,7 @@ return new class extends Migration
                 $table->date('start_date');
                 $table->date('end_date');
                 $table->boolean('is_active')->default(false);
+                $table->timestamp('created_at')->nullable()->useCurrent();
             });
         }
 
@@ -23,6 +24,7 @@ return new class extends Migration
                 $table->bigIncrements('class_id');
                 $table->string('class_name', 50)->unique();
                 $table->unsignedInteger('display_order')->default(1);
+                $table->timestamp('created_at')->nullable()->useCurrent();
             });
         }
 
@@ -32,6 +34,7 @@ return new class extends Migration
                 $table->unsignedBigInteger('class_id');
                 $table->string('section_name', 20);
                 $table->unique(['class_id', 'section_name']);
+                $table->timestamp('created_at')->nullable()->useCurrent();
             });
         }
 
@@ -53,6 +56,8 @@ return new class extends Migration
                 $table->text('address')->nullable();
                 $table->date('admission_date');
                 $table->string('status', 20)->default('ACTIVE');
+                $table->timestamp('created_at')->nullable()->useCurrent();
+                $table->timestamp('updated_at')->nullable()->useCurrent();
             });
         }
 
@@ -78,6 +83,17 @@ return new class extends Migration
                 $table->string('file_name', 255);
                 $table->string('file_path', 255)->nullable();
                 $table->timestamp('uploaded_at')->nullable();
+            });
+        }
+
+        if (! Schema::hasTable('fee_structures')) {
+            Schema::create('fee_structures', function (Blueprint $table): void {
+                $table->bigIncrements('fee_structure_id');
+                $table->unsignedBigInteger('academic_year_id');
+                $table->unsignedBigInteger('class_id');
+                $table->decimal('tuition_fee', 10, 2);
+                $table->decimal('books_fee', 10, 2);
+                $table->timestamp('created_at')->nullable()->useCurrent();
             });
         }
 
@@ -153,6 +169,7 @@ return new class extends Migration
         Schema::dropIfExists('receipts');
         Schema::dropIfExists('payments');
         Schema::dropIfExists('student_fee_accounts');
+        Schema::dropIfExists('fee_structures');
         Schema::dropIfExists('student_documents');
         Schema::dropIfExists('student_enrollments');
         Schema::dropIfExists('students');

@@ -55,20 +55,149 @@ class PromotionService
                     'status' => 'ACTIVE'
                 ]);
 
+                // Calculate previous dues by category
+                $prevTuitionDue = 0.00;
+                $prevBooksDue = 0.00;
+                $prevAdmissionDue = 0.00;
+
+                $oldCompAccounts = $oldEnrollment->feeComponentAccounts;
+                foreach ($oldCompAccounts as $oldCompAcc) {
+                    $bal = (float)$oldCompAcc->balance_amount;
+                    if ($bal <= 0) {
+                        continue;
+                    }
+                    $category = $oldCompAcc->component->category;
+                    $code = $oldCompAcc->component->component_code;
+
+                    if ($category === 'BOOKS' || $code === 'PREV_BOOKS_DUE') {
+                        $prevBooksDue += $bal;
+                    } elseif ($code === 'ADMISSION' || $code === 'PREV_ADMISSION_DUE') {
+                        $prevAdmissionDue += $bal;
+                    } else {
+                        // TUITION, STORE, PREV_TUITION_DUE, etc.
+                        $prevTuitionDue += $bal;
+                    }
+                }
+
+                $totalPrevDue = $prevTuitionDue + $prevBooksDue + $prevAdmissionDue;
+
+                // Ensure class_fee_components exist for target class/year
+                $classFeeCount = \App\Models\ClassFeeComponent::where('academic_year_id', $targetAYId)
+                    ->where('class_id', $targetClassId)
+                    ->count();
+                if ($classFeeCount === 0) {
+                    $tuitionSplit = round((float)$feeStructure->tuition_fee / 3, 2);
+                    $tuitionRem = (float)$feeStructure->tuition_fee - ($tuitionSplit * 2);
+                    
+                    // Determine admission fee based on class
+                    $classRoom = \App\Models\ClassRoom::find($targetClassId);
+                    $className = strtoupper($classRoom->class_name ?? '');
+                    $admissionFee = 500.00;
+                    if (preg_match('/VI|VII|VIII|IX|X/', $className) && !preg_match('/NURSERY|LKG|UKG|I|II|III|IV|V/', $className)) {
+                        $admissionFee = 1000.00;
+                    }
+
+                    $bookTotal = (float)$feeStructure->books_fee;
+                    $textbookVal = round($bookTotal * 0.90, 2);
+                    $notebookVal = $bookTotal - $textbookVal;
+
+                    $defaultPrices = [
+                        'ADMISSION' => $admissionFee,
+                        'TERM1' => $tuitionSplit,
+                        'TERM2' => $tuitionSplit,
+                        'TERM3' => $tuitionRem,
+                        'TEXTBOOK' => $textbookVal,
+                        'NOTEBOOK' => $notebookVal,
+                        'EXAM' => 500.00,
+                        'DIARY' => 500.00,
+                        'FILE' => 500.00,
+                        'BELT' => 150.00,
+                        'TIE' => 100.00,
+                        'TSHIRT' => 400.00,
+                    ];
+
+                    foreach ($defaultPrices as $code => $amt) {
+                        $comp = \App\Models\FeeComponent::where('component_code', $code)->first();
+                        if ($comp) {
+                            \App\Models\ClassFeeComponent::create([
+                                'academic_year_id' => $targetAYId,
+                                'class_id' => $targetClassId,
+                                'component_id' => $comp->component_id,
+                                'amount' => $amt,
+                                'created_at' => now(),
+                            ]);
+                        }
+                    }
+                }
+
+                // Create new mandatory components (TERM1, TERM2, TERM3)
+                $classComponents = \App\Models\ClassFeeComponent::with('component')
+                    ->where('academic_year_id', $targetAYId)
+                    ->where('class_id', $targetClassId)
+                    ->whereHas('component', function($q) {
+                        $q->where('category', 'TUITION');
+                    })
+                    ->get();
+
+                $newTuitionAmount = 0.00;
+                foreach ($classComponents as $classComp) {
+                    $amount = (float)$classComp->amount;
+                    \App\Models\StudentFeeComponentAccount::create([
+                        'student_id' => $studentId,
+                        'enrollment_id' => $newEnrollment->enrollment_id,
+                        'component_id' => $classComp->component_id,
+                        'amount' => $amount,
+                        'concession_amount' => 0.00,
+                        'waiver_amount' => 0.00,
+                        'paid_amount' => 0.00,
+                        'balance_amount' => $amount,
+                        'status' => 'PENDING',
+                        'created_at' => now(),
+                    ]);
+                    $newTuitionAmount += $amount;
+                }
+
+                // Create Carry Forward Components if outstanding dues exist
+                $carryForwards = [
+                    'PREV_TUITION_DUE' => $prevTuitionDue,
+                    'PREV_BOOKS_DUE' => $prevBooksDue,
+                    'PREV_ADMISSION_DUE' => $prevAdmissionDue,
+                ];
+
+                foreach ($carryForwards as $code => $amt) {
+                    if ($amt > 0) {
+                        $comp = \App\Models\FeeComponent::where('component_code', $code)->first();
+                        if ($comp) {
+                            \App\Models\StudentFeeComponentAccount::create([
+                                'student_id' => $studentId,
+                                'enrollment_id' => $newEnrollment->enrollment_id,
+                                'component_id' => $comp->component_id,
+                                'amount' => $amt,
+                                'concession_amount' => 0.00,
+                                'waiver_amount' => 0.00,
+                                'paid_amount' => 0.00,
+                                'balance_amount' => $amt,
+                                'status' => 'PENDING',
+                                'created_at' => now(),
+                            ]);
+                        }
+                    }
+                }
+
                 // Create New Fee Account
                 StudentFeeAccount::create([
                     'enrollment_id' => $newEnrollment->enrollment_id,
                     'fee_structure_id' => $feeStructure->fee_structure_id,
                     'discount_amount' => 0,
-                    'final_tuition_fee' => $feeStructure->tuition_fee,
+                    'final_tuition_fee' => $newTuitionAmount,
                     'books_status' => 'PENDING',
                     'books_from_school' => true,
                     'books_fee_applied' => 0,
                     'books_fee' => $feeStructure->books_fee,
-                    'net_fee' => $feeStructure->tuition_fee,
-                    'previous_balance' => 0,
+                    'net_fee' => $newTuitionAmount,
+                    'previous_balance' => $totalPrevDue,
                     'waived_amount' => 0,
-                    'total_due' => $feeStructure->tuition_fee,
+                    'total_due' => $newTuitionAmount + $totalPrevDue,
                     'status' => 'UNPAID'
                 ]);
             }

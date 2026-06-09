@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\ReceiptComponentDetail;
 
 class Receipt extends Model
 {
@@ -32,5 +34,14 @@ class Receipt extends Model
     public function payment(): BelongsTo
     {
         return $this->belongsTo(Payment::class, 'payment_id', 'payment_id');
+    }
+
+    public function details(): HasMany
+    {
+        return $this->hasMany(
+            ReceiptComponentDetail::class,
+            'receipt_id',
+            'receipt_id'
+        );
     }
 }

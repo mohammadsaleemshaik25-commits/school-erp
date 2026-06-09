@@ -64,6 +64,7 @@ class AdmissionService
                 'admission_date' => $data['admission_date'],
                 'photo_path' => $photoPath,
                 'status' => 'INACTIVE', // Becomes ACTIVE after approval and fee account creation
+                'admission_type' => $data['admission_type'] ?? 'NEW',
             ]);
 
             // 4. Create Admission Record (Status: PENDING)
@@ -278,9 +279,9 @@ class AdmissionService
     /**
      * Finalize admission after Books Decision (Creates Enrollment and Fee Account)
      */
-    public function finalizeAdmission(int $admissionId, string $booksStatus, int $userId): Admission
+    public function finalizeAdmission(int $admissionId, string $booksStatus, int $userId, array $selectedComponents = []): Admission
     {
-        return DB::transaction(function () use ($admissionId, $booksStatus, $userId) {
+        return DB::transaction(function () use ($admissionId, $booksStatus, $userId, $selectedComponents) {
             $admission = Admission::with('student')->findOrFail($admissionId);
             
             if ($admission->admission_status !== 'APPROVED') {
@@ -313,30 +314,156 @@ class AdmissionService
                 'status' => 'ACTIVE',
             ]);
 
-            // 3. Determine Books Fee Applied
-            $booksFeeApplied = 0;
-            $booksFromSchool = false;
-            if ($booksStatus === StudentFeeAccount::BOOKS_SCHOOL) {
-                $booksFeeApplied = $feeStructure->books_fee;
-                $booksFromSchool = true;
+            // Ensure class_fee_components exist, if not seed them from feeStructure
+            $classFeeCount = \App\Models\ClassFeeComponent::where('academic_year_id', $admission->academic_year_id)
+                ->where('class_id', $admission->class_id)
+                ->count();
+            if ($classFeeCount === 0) {
+                $tuitionSplit = round((float)$feeStructure->tuition_fee / 3, 2);
+                $tuitionRem = (float)$feeStructure->tuition_fee - ($tuitionSplit * 2);
+                
+                // Determine admission fee based on class
+                $classRoom = \App\Models\ClassRoom::find($admission->class_id);
+                $className = strtoupper($classRoom->class_name ?? '');
+                $admissionFee = 500.00;
+                if (preg_match('/VI|VII|VIII|IX|X/', $className) && !preg_match('/NURSERY|LKG|UKG|I|II|III|IV|V/', $className)) {
+                    $admissionFee = 1000.00;
+                }
+
+                $bookTotal = (float)$feeStructure->books_fee;
+                $textbookVal = round($bookTotal * 0.90, 2);
+                $notebookVal = $bookTotal - $textbookVal;
+
+                $defaultPrices = [
+                    'ADMISSION' => $admissionFee,
+                    'TERM1' => $tuitionSplit,
+                    'TERM2' => $tuitionSplit,
+                    'TERM3' => $tuitionRem,
+                    'TEXTBOOK' => $textbookVal,
+                    'NOTEBOOK' => $notebookVal,
+                    'EXAM' => 500.00,
+                    'DIARY' => 500.00,
+                    'FILE' => 500.00,
+                    'BELT' => 150.00,
+                    'TIE' => 100.00,
+                    'TSHIRT' => 400.00,
+                ];
+
+                foreach ($defaultPrices as $code => $amt) {
+                    $comp = \App\Models\FeeComponent::where('component_code', $code)->first();
+                    if ($comp) {
+                        \App\Models\ClassFeeComponent::create([
+                            'academic_year_id' => $admission->academic_year_id,
+                            'class_id' => $admission->class_id,
+                            'component_id' => $comp->component_id,
+                            'amount' => $amt,
+                            'created_at' => now(),
+                        ]);
+                    }
+                }
             }
 
-            // 4. Create Student Fee Account
+            // Fallback for empty selected components based on booksStatus string
+            if (empty($selectedComponents)) {
+                if ($booksStatus === \App\Models\StudentFeeAccount::BOOKS_SCHOOL) {
+                    $selectedComponents = ['TEXTBOOK', 'NOTEBOOK', 'EXAM', 'DIARY', 'FILE'];
+                }
+            }
+
+            $classComponents = \App\Models\ClassFeeComponent::with('component')
+                ->where('academic_year_id', $admission->academic_year_id)
+                ->where('class_id', $admission->class_id)
+                ->get();
+
+            // Determine if ADMISSION is charged
+            $student = $admission->student;
+            $chargeAdmission = false;
+            if ($student->admission_type === 'NEW' || $student->admission_type === 'READMISSION') {
+                $chargeAdmission = true;
+            } elseif ($student->admission_type === 'TRANSFER') {
+                // If TRANSFER, charge admission only if explicitly selected
+                $chargeAdmission = in_array('ADMISSION', $selectedComponents);
+            }
+
+            $booksFeeApplied = 0.00;
+            $tuitionFeeApplied = 0.00;
+
+            foreach ($classComponents as $classComp) {
+                $code = $classComp->component->component_code;
+                $category = $classComp->component->category;
+
+                $shouldCharge = false;
+                if ($category === 'TUITION') {
+                    $shouldCharge = true;
+                } elseif ($code === 'ADMISSION') {
+                    $shouldCharge = $chargeAdmission;
+                } else {
+                    $shouldCharge = in_array($code, $selectedComponents);
+                }
+
+                if ($shouldCharge) {
+                    $amount = (float) $classComp->amount;
+
+                    \App\Models\StudentFeeComponentAccount::create([
+                        'student_id' => $student->student_id,
+                        'enrollment_id' => $enrollment->enrollment_id,
+                        'component_id' => $classComp->component_id,
+                        'amount' => $amount,
+                        'concession_amount' => 0.00,
+                        'waiver_amount' => 0.00,
+                        'paid_amount' => 0.00,
+                        'balance_amount' => $amount,
+                        'status' => 'PENDING',
+                        'created_at' => now(),
+                    ]);
+
+                    if ($category === 'BOOKS') {
+                        $booksFeeApplied += $amount;
+                        \App\Models\StudentFeeComponentSelection::create([
+                            'student_id' => $student->student_id,
+                            'enrollment_id' => $enrollment->enrollment_id,
+                            'component_id' => $classComp->component_id,
+                            'amount' => $amount,
+                            'selected_by' => $userId,
+                            'selected_at' => now(),
+                        ]);
+                    } elseif ($category === 'STORE') {
+                        $tuitionFeeApplied += $amount;
+                        \App\Models\StudentFeeComponentSelection::create([
+                            'student_id' => $student->student_id,
+                            'enrollment_id' => $enrollment->enrollment_id,
+                            'component_id' => $classComp->component_id,
+                            'amount' => $amount,
+                            'selected_by' => $userId,
+                            'selected_at' => now(),
+                        ]);
+                    } else {
+                        $tuitionFeeApplied += $amount;
+                    }
+                }
+            }
+
+            // Sync legacy StudentFeeAccount record
+            $legacyBooksStatus = 'OUTSIDE';
+            if ($booksFeeApplied > 0) {
+                $legacyBooksStatus = 'SCHOOL';
+            }
+
             StudentFeeAccount::create([
                 'enrollment_id' => $enrollment->enrollment_id,
                 'fee_structure_id' => $feeStructure->fee_structure_id,
                 'discount_amount' => 0,
-                'final_tuition_fee' => $feeStructure->tuition_fee,
-                'books_status' => $booksStatus,
-                'books_from_school' => $booksFromSchool,
+                'final_tuition_fee' => $tuitionFeeApplied,
+                'books_status' => $legacyBooksStatus,
+                'books_from_school' => ($legacyBooksStatus === 'SCHOOL'),
                 'books_decision_by' => $userId,
                 'books_decision_date' => now(),
                 'books_fee_applied' => $booksFeeApplied,
                 'books_fee' => $feeStructure->books_fee,
-                'net_fee' => $feeStructure->tuition_fee + $booksFeeApplied,
+                'net_fee' => $tuitionFeeApplied + $booksFeeApplied,
                 'previous_balance' => 0,
                 'waived_amount' => 0,
-                'total_due' => $feeStructure->tuition_fee + $booksFeeApplied,
+                'total_due' => $tuitionFeeApplied + $booksFeeApplied,
                 'status' => 'UNPAID',
             ]);
 

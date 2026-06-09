@@ -56,4 +56,9 @@ class Payment extends Model
     {
         return $this->hasOne(Receipt::class, 'payment_id', 'payment_id');
     }
+
+    public function allocations(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PaymentComponentAllocation::class, 'payment_id', 'payment_id');
+    }
 }

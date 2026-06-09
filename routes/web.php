@@ -5,12 +5,11 @@ use App\Http\Controllers\AdmissionBulkImportController;
 use App\Http\Controllers\AdmissionPhotoSyncController;
 use App\Http\Controllers\AdmissionTransferController;
 use App\Http\Controllers\PromotionController;
-use App\Http\Controllers\BooksDecisionController;
+use App\Http\Controllers\FeeCollectionController;
 use App\Http\Controllers\AcademicYearController;
 use App\Http\Controllers\AdmissionRegisterController;
 use App\Http\Controllers\Api\StudentApiController;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\BooksFeeController;
 use App\Http\Controllers\ClassController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FeeAdjustmentController;
@@ -44,25 +43,33 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('/clerk/dashboard', [DashboardController::class, 'index'])->name('clerk.dashboard');
 
-        Route::get('/fees/search-students', [PaymentController::class, 'searchStudents'])->name('fees.search.students');
-        Route::get('/fees/finder', [PaymentController::class, 'finder'])->name('fees.finder');
-        Route::get('/fees/collect', [PaymentController::class, 'create'])->name('fees.collect');
-        Route::post('/fees/collect', [PaymentController::class, 'store'])->name('fees.payments.store');
+        // Route::get('/fees/search-students', [PaymentController::class, 'searchStudents'])->name('fees.search.students');
+        // Route::get('/fees/finder', [PaymentController::class, 'finder'])->name('fees.finder');
+        Route::get('/fees/collect', function () {return redirect()->route('fees-collection.index');})->name('fees.collect');
+        // Route::post('/fees/collect', [PaymentController::class, 'store'])->name('fees.payments.store');
         Route::post('/fees/previous-fee/{account}/close', [PaymentController::class, 'closePreviousFee'])->name('fees.previous.close');
         Route::post('/fees/previous-fee/{account}/waive', [PaymentController::class, 'waivePreviousFee'])->name('fees.previous.waive');
         Route::get('/fees/ledger/{account}', [PaymentController::class, 'ledger'])->name('fees.ledger');
 
+        // New Fee Collection Workflow
+        Route::prefix('fees-collection')->group(function () {
+            Route::get('/ledger/{studentId}',[FeeCollectionController::class, 'ledger'])->name('fees-collection.ledger');
+            Route::get('/concession-request/{studentId}',[FeeCollectionController::class, 'concessionRequest'])->name('fees-collection.concession-request');
+            Route::post('/concession-request',[FeeCollectionController::class, 'storeConcessionRequest'])->name('fees-collection.concession-request.store');
+            Route::get('/', [FeeCollectionController::class, 'index'])->name('fees-collection.index');
+            Route::get('/search', [FeeCollectionController::class, 'search'])->name('fees-collection.search');
+            Route::get('/workspace/{studentId}', [FeeCollectionController::class, 'workspace'])->name('fees-collection.workspace');
+            Route::post('/update-selections', [FeeCollectionController::class, 'updateBookSelections'])->name('fees-collection.update-selections');
+            Route::get('/payment/{accountId}', [FeeCollectionController::class, 'showPaymentForm'])->name('fees-collection.payment');
+            Route::post('/collect-payment', [FeeCollectionController::class, 'collectPayment'])->name('fees-collection.collect-payment');
+            Route::post('/close-previous-balance', [FeeCollectionController::class, 'closePreviousBalance'])->name('fees-collection.close-previous-balance');
+        });
+
         Route::get('/receipts', [ReceiptController::class, 'index'])->name('fees.receipts.index');
         Route::get('/receipts/{receipt}', [ReceiptController::class, 'show'])->name('fees.receipts.show');
-        Route::get('/receipts/{receipt}/print', [ReceiptController::class, 'show'])->name('fees.receipts.print');
         Route::post('/receipts/{receipt}/reprint', [ReceiptController::class, 'reprint'])->name('fees.receipts.reprint');
         Route::post('/payments/{payment}/cancel', [PaymentController::class, 'cancel'])->name('fees.payments.cancel');
-
-        Route::get('/books-decisions', [BooksDecisionController::class, 'index'])->name('books.index');
-        Route::get('/books-decisions/{account}/edit', [BooksDecisionController::class, 'edit'])->name('books.edit');
-        Route::put('/books-decisions/{account}', [BooksDecisionController::class, 'update'])->name('books.update');
-        Route::post('/books-decisions/admission/{admission}', [BooksDecisionController::class, 'finalizeAdmission'])->name('books.finalize');
-        Route::get('/books-reports', [BooksDecisionController::class, 'report'])->name('books.report');
+        Route::get('/receipts/{receipt}/print', [ReceiptController::class, 'show'])->name('fees.receipts.print');
 
         // Promotion Routes
         Route::middleware('role:Admin,Administrator,Principal,Correspondent')->group(function () {
@@ -75,8 +82,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/fees/adjustments', [FeeAdjustmentController::class, 'index'])->name('fees.adjustments.index');
         Route::get('/fees/adjustments/finder', [FeeAdjustmentController::class, 'finder'])->name('fees.adjustments.finder');
         Route::post('/fees/adjustments', [FeeAdjustmentController::class, 'store'])->name('fees.adjustments.store');
-        Route::patch('/fees/books-fee/{accountId}', [BooksFeeController::class, 'update'])->name('fees.books.update');
-
+      
         Route::get('/students', [StudentController::class, 'index']);
         Route::get('/students/{student}', [StudentController::class, 'show']);
         Route::get('/students/{student}/history', [StudentController::class, 'history']);

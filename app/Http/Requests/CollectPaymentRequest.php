@@ -24,6 +24,8 @@ class CollectPaymentRequest extends FormRequest
             'books_purchased'        => 'nullable|string|in:yes,no',
             'allocation'             => 'nullable|string|in:BOOKS,TUITION,PREVIOUS',
             'overpayment_allocation' => 'nullable|string|in:BOOKS,TUITION,PREVIOUS',
+            'allocations'            => 'nullable|array',
+            'allocations.*'          => 'required|numeric|min:0',
         ];
     }
 

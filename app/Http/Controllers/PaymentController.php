@@ -35,6 +35,7 @@ class PaymentController extends Controller
 
         $previousAccounts = collect();
         $allAccounts = collect();
+        $componentAccounts = collect();
         // Scenario: Clerk selected a student and loaded their checkout ledger
         if ($request->filled('account_id')) {
             $account = StudentFeeAccount::with(['enrollment.student', 'enrollment.academicYear', 'enrollment.classRoom', 'enrollment.section'])
@@ -55,6 +56,11 @@ class PaymentController extends Controller
             })->sortBy(function($acc) {
                 return $acc->enrollment->academicYear->start_date;
             });
+
+            if ($account->enrollment) {
+                $account->load(['enrollment.feeComponentAccounts.component']);
+                $componentAccounts = $account->enrollment->feeComponentAccounts;
+            }
         } 
 
         // Dashboard stats for fee collection page
@@ -87,7 +93,8 @@ class PaymentController extends Controller
             'cancelledReceipts',
             'totalPending',
             'previousAccounts',
-            'allAccounts'
+            'allAccounts',
+            'componentAccounts'
         ));
     }
 
@@ -202,9 +209,10 @@ class PaymentController extends Controller
                 ->withErrors(['error' => $e->getMessage()]);
         }
     }
+
     public function searchStudents(Request $request)
     {
-        $term = trim($request->get('term', ''));
+        $term = trim($request->get('query', $request->get('term', '')));
 
         if (empty($term)) {
             return response()->json([]);
@@ -326,6 +334,17 @@ class PaymentController extends Controller
         $account->closed_at = now();
         $account->save();
 
+        // Sync component accounts
+        if ($account->enrollment && $account->enrollment->feeComponentAccounts()->count() > 0) {
+            foreach ($account->enrollment->feeComponentAccounts as $compAcc) {
+                if ($compAcc->balance_amount > 0) {
+                    $compAcc->paid_amount += $compAcc->balance_amount;
+                    $compAcc->recalculateBalance();
+                    $compAcc->save();
+                }
+            }
+        }
+
         \App\Models\AuditLog::create([
             'user_id' => auth()->id(),
             'action' => 'PREVIOUS_FEE_CLOSED',
@@ -359,6 +378,28 @@ class PaymentController extends Controller
         $account->waived_date = now();
         $account->recalculateTotals();
         $account->save();
+
+        // Sync component accounts and create fee_waivers
+        if ($account->enrollment && $account->enrollment->feeComponentAccounts()->count() > 0) {
+            foreach ($account->enrollment->feeComponentAccounts as $compAcc) {
+                $compBal = (float)$compAcc->balance_amount;
+                if ($compBal > 0) {
+                    \App\Models\FeeWaiver::create([
+                        'student_id' => $account->enrollment->student_id,
+                        'enrollment_id' => $account->enrollment_id,
+                        'component_id' => $compAcc->component_id,
+                        'waiver_amount' => $compBal,
+                        'reason' => $request->input('reason') . " (Legacy Waive)",
+                        'approved_by' => auth()->id(),
+                        'approved_at' => now(),
+                    ]);
+
+                    $compAcc->waiver_amount += $compBal;
+                    $compAcc->recalculateBalance();
+                    $compAcc->save();
+                }
+            }
+        }
 
         \App\Models\AuditLog::create([
             'user_id' => auth()->id(),
