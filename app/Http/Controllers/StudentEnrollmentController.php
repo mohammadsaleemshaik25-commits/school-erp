@@ -7,6 +7,7 @@ use App\Models\ClassRoom;
 use App\Models\Section;
 use App\Models\Student;
 use App\Models\StudentEnrollment;
+use App\Services\EnrollmentService;
 use Illuminate\Http\Request;
 
 class StudentEnrollmentController extends Controller
@@ -50,15 +51,23 @@ class StudentEnrollmentController extends Controller
             'status' => ['required', 'string', 'max:20'],
         ]);
 
-        StudentEnrollment::create([
-            'student_id' => $student->student_id,
-            'academic_year_id' => $request->academic_year_id,
-            'class_id' => $request->class_id,
-            'section_id' => $request->section_id,
-            'promotion_status' => $request->promotion_status,
-            'status' => $request->status,
-        ]);
+        try {
+            // Use the new EnrollmentService to create enrollment with associated fee accounts
+            $enrollmentService = new EnrollmentService();
+            $enrollmentService->createEnrollmentWithFees(
+                $student->student_id,
+                $request->academic_year_id,
+                $request->class_id,
+                $request->section_id,
+                $request->promotion_status,
+                $request->status,
+                auth()->id() // Assuming the current authenticated user is performing the action
+            );
 
-        return redirect("/students/{$student->student_id}/enrollments");
+            return redirect("/students/{$student->student_id}/enrollments")
+                ->with('success', 'Enrollment created successfully with fee accounts.');
+        } catch (\Exception $e) {
+            return back()->withInput()->with('error', 'Error creating enrollment: ' . $e->getMessage());
+        }
     }
 }

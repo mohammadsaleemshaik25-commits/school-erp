@@ -11,11 +11,19 @@ use App\Models\Section;
 use App\Models\AcademicYear;
 use App\Models\StudentEnrollment;
 use App\Models\AuditLog;
+use App\Services\EnrollmentService;
 use Illuminate\Support\Facades\DB;
 use Exception;
 
 class AdmissionTransferController extends Controller
 {
+    protected EnrollmentService $enrollmentService;
+
+    public function __construct(EnrollmentService $enrollmentService)
+    {
+        $this->enrollmentService = $enrollmentService;
+    }
+
     public function index()
     {
         $classes = ClassRoom::all();
@@ -55,15 +63,16 @@ class AdmissionTransferController extends Controller
                 'created_by' => auth()->id(),
             ]);
 
-            // 3. Create New Enrollment
-            StudentEnrollment::create([
-                'student_id' => $student->student_id,
-                'academic_year_id' => $request->academic_year_id,
-                'class_id' => $request->class_id,
-                'section_id' => $request->section_id,
-                'promotion_status' => 'TRANSFER',
-                'status' => 'ACTIVE',
-            ]);
+            // 3. Create New Enrollment with fees using EnrollmentService
+            $this->enrollmentService->createEnrollmentWithFees(
+                $student->student_id,
+                $request->academic_year_id,
+                $request->class_id,
+                $request->section_id,
+                'TRANSFER',
+                'ACTIVE',
+                auth()->id()
+            );
 
             // 4. Log the transfer action
             $oldSectionName = $oldAdmission && $oldAdmission->section ? $oldAdmission->section->section_name : 'N/A';

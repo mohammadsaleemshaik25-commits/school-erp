@@ -8,6 +8,7 @@ use App\Models\StudentFeeAccount;
 use App\Models\AcademicYear;
 use App\Models\ClassRoom;
 use App\Models\Section;
+use App\Services\EnrollmentService;
 use App\Models\FeeStructure;
 use Illuminate\Http\Request;
 
@@ -72,48 +73,32 @@ class StudentController extends Controller
         $validated['photo_path'] = $photoPath;
         unset($validated['photo']);
 
-        // Extract enrollment data
+        // Extract enrollment data for the new service
         $academicYearId = $validated['academic_year_id'];
         $classId = $validated['class_id'];
         $sectionId = $validated['section_id'];
         unset($validated['academic_year_id'], $validated['class_id'], $validated['section_id']);
 
-        // Create student
-        $student = Student::create($validated);
+        try {
+            // Create student
+            $student = Student::create($validated);
 
-        // Create enrollment
-        $enrollment = StudentEnrollment::create([
-            'student_id' => $student->student_id,
-            'academic_year_id' => $academicYearId,
-            'class_id' => $classId,
-            'section_id' => $sectionId,
-            'promotion_status' => 'PROMOTED',
-            'status' => 'ACTIVE',
-        ]);
+            // Use the new EnrollmentService to create enrollment with associated fee accounts
+            $enrollmentService = new EnrollmentService();
+            $enrollmentService->createEnrollmentWithFees(
+                $student->student_id,
+                $academicYearId,
+                $classId,
+                $sectionId,
+                'NEW', // Assuming this is a new admission, not a promotion
+                'ACTIVE',
+                auth()->id() // Assuming the current authenticated user is performing the action
+            );
 
-        // Get fee structure for the class
-        $feeStructure = FeeStructure::where('class_id', $classId)
-            ->where('academic_year_id', $academicYearId)
-            ->first();
-
-        // Create fee account
-        StudentFeeAccount::create([
-            'enrollment_id' => $enrollment->enrollment_id,
-            'fee_structure_id' => $feeStructure ? $feeStructure->fee_structure_id : null,
-            'discount_amount' => 0,
-            'final_tuition_fee' => $feeStructure ? $feeStructure->tuition_fee : 0,
-            'books_status' => 'PENDING',
-            'books_from_school' => false,
-            'books_fee_applied' => 0,
-            'books_fee' => $feeStructure ? $feeStructure->books_fee : 0,
-            'net_fee' => $feeStructure ? ($feeStructure->tuition_fee + $feeStructure->books_fee) : 0,
-            'previous_balance' => 0,
-            'waived_amount' => 0,
-            'total_due' => $feeStructure ? ($feeStructure->tuition_fee + $feeStructure->books_fee) : 0,
-            'status' => 'UNPAID',
-        ]);
-
-        return redirect('/students')->with('success', 'Student added successfully with enrollment and fee account created.');
+            return redirect('/students')->with('success', 'Student added successfully with enrollment and fee account created.');
+        } catch (\Exception $e) {
+            return back()->withInput()->with('error', 'Error adding student: ' . $e->getMessage());
+        }
     }
 
     public function edit(Student $student)

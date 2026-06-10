@@ -86,48 +86,7 @@ class PromotionService
                     ->where('class_id', $targetClassId)
                     ->count();
                 if ($classFeeCount === 0) {
-                    $tuitionSplit = round((float)$feeStructure->tuition_fee / 3, 2);
-                    $tuitionRem = (float)$feeStructure->tuition_fee - ($tuitionSplit * 2);
-                    
-                    // Determine admission fee based on class
-                    $classRoom = \App\Models\ClassRoom::find($targetClassId);
-                    $className = strtoupper($classRoom->class_name ?? '');
-                    $admissionFee = 500.00;
-                    if (preg_match('/VI|VII|VIII|IX|X/', $className) && !preg_match('/NURSERY|LKG|UKG|I|II|III|IV|V/', $className)) {
-                        $admissionFee = 1000.00;
-                    }
-
-                    $bookTotal = (float)$feeStructure->books_fee;
-                    $textbookVal = round($bookTotal * 0.90, 2);
-                    $notebookVal = $bookTotal - $textbookVal;
-
-                    $defaultPrices = [
-                        'ADMISSION' => $admissionFee,
-                        'TERM1' => $tuitionSplit,
-                        'TERM2' => $tuitionSplit,
-                        'TERM3' => $tuitionRem,
-                        'TEXTBOOK' => $textbookVal,
-                        'NOTEBOOK' => $notebookVal,
-                        'EXAM' => 500.00,
-                        'DIARY' => 500.00,
-                        'FILE' => 500.00,
-                        'BELT' => 150.00,
-                        'TIE' => 100.00,
-                        'TSHIRT' => 400.00,
-                    ];
-
-                    foreach ($defaultPrices as $code => $amt) {
-                        $comp = \App\Models\FeeComponent::where('component_code', $code)->first();
-                        if ($comp) {
-                            \App\Models\ClassFeeComponent::create([
-                                'academic_year_id' => $targetAYId,
-                                'class_id' => $targetClassId,
-                                'component_id' => $comp->component_id,
-                                'amount' => $amt,
-                                'created_at' => now(),
-                            ]);
-                        }
-                    }
+                    $this->enrollmentService->seedClassFeeComponents($targetAYId, $targetClassId, $feeStructure);
                 }
 
                 // Create new mandatory components (TERM1, TERM2, TERM3)

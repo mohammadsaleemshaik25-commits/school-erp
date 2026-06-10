@@ -16,9 +16,13 @@ use Exception;
 
 class AdmissionService
 {
-    /**
-     * Create a new admission (Initial Step: PENDING)
-     */
+    protected EnrollmentService $enrollmentService;
+
+    public function __construct(EnrollmentService $enrollmentService)
+    {
+        $this->enrollmentService = $enrollmentService;
+    }
+
     public function createAdmission(array $data, int $userId): Admission
     {
         return DB::transaction(function () use ($data, $userId) {
@@ -192,52 +196,50 @@ class AdmissionService
 
     /**
      * Admit student (Finalize admission)
+     * DEPRECATED: Now calls finalizeAdmission to ensure fee accounts are created
      */
     public function admitStudent(int $admissionId, int $userId): Admission
     {
-        return DB::transaction(function () use ($admissionId, $userId) {
-            $admission = Admission::with('student')->findOrFail($admissionId);
+        // Call finalizeAdmission with default values: Books from School with default components
+        return $this->finalizeAdmission($admissionId, \App\Models\StudentFeeAccount::BOOKS_SCHOOL, $userId, ['TEXTBOOK', 'NOTEBOOK', 'EXAM', 'DIARY', 'FILE']);
+    }
 
-            if ($admission->admission_status !== Admission::STATUS_APPROVED) {
-                throw new Exception("Only approved admissions can be admitted.");
-            }
-
-            // Check if enrollment already exists
-            $existingEnrollment = StudentEnrollment::where('student_id', $admission->student_id)
-                ->where('academic_year_id', $admission->academic_year_id)
+    /**
+     * Repair missing fee accounts for an enrollment
+     */
+    public function repairMissingFeeAccount(int $enrollmentId, int $userId): void
+    {
+        DB::transaction(function () use ($enrollmentId, $userId) {
+            $enrollment = StudentEnrollment::with('student', 'academicYear', 'classRoom')->findOrFail($enrollmentId);
+            $admission = Admission::where('student_id', $enrollment->student_id)
+                ->where('academic_year_id', $enrollment->academic_year_id)
                 ->first();
-
-            if (!$existingEnrollment) {
-                // Create enrollment
-                StudentEnrollment::create([
-                    'student_id' => $admission->student_id,
-                    'academic_year_id' => $admission->academic_year_id,
-                    'class_id' => $admission->class_id,
-                    'section_id' => $admission->section_id,
-                    'promotion_status' => 'NEW',
-                    'status' => 'ACTIVE',
-                ]);
+            
+            if (!$admission) {
+                throw new Exception("No admission found for this enrollment.");
             }
 
-            // Activate student
-            $admission->student->update(['status' => 'ACTIVE']);
+            // Check if fee account already exists
+            if ($enrollment->feeAccount) {
+                throw new Exception("Fee account already exists for this enrollment.");
+            }
 
-            $admission->update([
-                'admission_status' => Admission::STATUS_ADMITTED,
-                'admitted_at' => now(),
-                'admitted_by' => $userId,
-            ]);
+            $feeStructure = FeeStructure::where('academic_year_id', $enrollment->academic_year_id)->where('class_id', $enrollment->class_id)->firstOrFail("Fee structure not defined for the selected academic year and class.");
+
+            if (\App\Models\ClassFeeComponent::where('academic_year_id', $enrollment->academic_year_id)->where('class_id', $enrollment->class_id)->count() === 0) {
+                $this->enrollmentService->seedClassFeeComponents($enrollment->academic_year_id, $enrollment->class_id, $feeStructure);
+            }
+
+            $this->enrollmentService->createStudentFeeAccountsForEnrollment($enrollment, $feeStructure, $userId, ['TEXTBOOK', 'NOTEBOOK', 'EXAM', 'DIARY', 'FILE']);
 
             $this->logAction(
                 $userId,
-                'ADMISSION_ADMITTED',
-                'admissions',
-                $admissionId,
-                $admission->admission_status,
-                Admission::STATUS_ADMITTED
+                'FEE_ACCOUNT_REPAIRED',
+                'student_enrollments',
+                $enrollmentId,
+                null,
+                "Fee account and component accounts created for enrollment ID: {$enrollmentId}"
             );
-
-            return $admission;
         });
     }
 
@@ -295,180 +297,33 @@ class AdmissionService
                 throw new Exception("Admission is already finalized (Enrollment exists).");
             }
 
-            // 1. Find Fee Structure
-            $feeStructure = FeeStructure::where('academic_year_id', $admission->academic_year_id)
-                ->where('class_id', $admission->class_id)
-                ->first();
+            $feeStructure = FeeStructure::where('academic_year_id', $admission->academic_year_id)->where('class_id', $admission->class_id)->first();
 
             if (!$feeStructure) {
                 throw new Exception("Fee structure not defined for the selected academic year and class.");
             }
 
             // 2. Create Enrollment
-            $enrollment = StudentEnrollment::create([
-                'student_id' => $admission->student_id,
-                'academic_year_id' => $admission->academic_year_id,
-                'class_id' => $admission->class_id,
-                'section_id' => $admission->section_id,
-                'promotion_status' => 'NEW',
-                'status' => 'ACTIVE',
-            ]);
-
-            // Ensure class_fee_components exist, if not seed them from feeStructure
-            $classFeeCount = \App\Models\ClassFeeComponent::where('academic_year_id', $admission->academic_year_id)
-                ->where('class_id', $admission->class_id)
-                ->count();
-            if ($classFeeCount === 0) {
-                $tuitionSplit = round((float)$feeStructure->tuition_fee / 3, 2);
-                $tuitionRem = (float)$feeStructure->tuition_fee - ($tuitionSplit * 2);
-                
-                // Determine admission fee based on class
-                $classRoom = \App\Models\ClassRoom::find($admission->class_id);
-                $className = strtoupper($classRoom->class_name ?? '');
-                $admissionFee = 500.00;
-                if (preg_match('/VI|VII|VIII|IX|X/', $className) && !preg_match('/NURSERY|LKG|UKG|I|II|III|IV|V/', $className)) {
-                    $admissionFee = 1000.00;
-                }
-
-                $bookTotal = (float)$feeStructure->books_fee;
-                $textbookVal = round($bookTotal * 0.90, 2);
-                $notebookVal = $bookTotal - $textbookVal;
-
-                $defaultPrices = [
-                    'ADMISSION' => $admissionFee,
-                    'TERM1' => $tuitionSplit,
-                    'TERM2' => $tuitionSplit,
-                    'TERM3' => $tuitionRem,
-                    'TEXTBOOK' => $textbookVal,
-                    'NOTEBOOK' => $notebookVal,
-                    'EXAM' => 500.00,
-                    'DIARY' => 500.00,
-                    'FILE' => 500.00,
-                    'BELT' => 150.00,
-                    'TIE' => 100.00,
-                    'TSHIRT' => 400.00,
-                ];
-
-                foreach ($defaultPrices as $code => $amt) {
-                    $comp = \App\Models\FeeComponent::where('component_code', $code)->first();
-                    if ($comp) {
-                        \App\Models\ClassFeeComponent::create([
-                            'academic_year_id' => $admission->academic_year_id,
-                            'class_id' => $admission->class_id,
-                            'component_id' => $comp->component_id,
-                            'amount' => $amt,
-                            'created_at' => now(),
-                        ]);
-                    }
-                }
-            }
-
-            // Fallback for empty selected components based on booksStatus string
-            if (empty($selectedComponents)) {
-                if ($booksStatus === \App\Models\StudentFeeAccount::BOOKS_SCHOOL) {
-                    $selectedComponents = ['TEXTBOOK', 'NOTEBOOK', 'EXAM', 'DIARY', 'FILE'];
-                }
-            }
-
-            $classComponents = \App\Models\ClassFeeComponent::with('component')
-                ->where('academic_year_id', $admission->academic_year_id)
-                ->where('class_id', $admission->class_id)
-                ->get();
-
-            // Determine if ADMISSION is charged
-            $student = $admission->student;
-            $chargeAdmission = false;
-            if ($student->admission_type === 'NEW' || $student->admission_type === 'READMISSION') {
-                $chargeAdmission = true;
-            } elseif ($student->admission_type === 'TRANSFER') {
-                // If TRANSFER, charge admission only if explicitly selected
-                $chargeAdmission = in_array('ADMISSION', $selectedComponents);
-            }
-
-            $booksFeeApplied = 0.00;
-            $tuitionFeeApplied = 0.00;
-
-            foreach ($classComponents as $classComp) {
-                $code = $classComp->component->component_code;
-                $category = $classComp->component->category;
-
-                $shouldCharge = false;
-                if ($category === 'TUITION') {
-                    $shouldCharge = true;
-                } elseif ($code === 'ADMISSION') {
-                    $shouldCharge = $chargeAdmission;
-                } else {
-                    $shouldCharge = in_array($code, $selectedComponents);
-                }
-
-                if ($shouldCharge) {
-                    $amount = (float) $classComp->amount;
-
-                    \App\Models\StudentFeeComponentAccount::create([
-                        'student_id' => $student->student_id,
-                        'enrollment_id' => $enrollment->enrollment_id,
-                        'component_id' => $classComp->component_id,
-                        'amount' => $amount,
-                        'concession_amount' => 0.00,
-                        'waiver_amount' => 0.00,
-                        'paid_amount' => 0.00,
-                        'balance_amount' => $amount,
-                        'status' => 'PENDING',
-                        'created_at' => now(),
-                    ]);
-
-                    if ($category === 'BOOKS') {
-                        $booksFeeApplied += $amount;
-                        \App\Models\StudentFeeComponentSelection::create([
-                            'student_id' => $student->student_id,
-                            'enrollment_id' => $enrollment->enrollment_id,
-                            'component_id' => $classComp->component_id,
-                            'amount' => $amount,
-                            'selected_by' => $userId,
-                            'selected_at' => now(),
-                        ]);
-                    } elseif ($category === 'STORE') {
-                        $tuitionFeeApplied += $amount;
-                        \App\Models\StudentFeeComponentSelection::create([
-                            'student_id' => $student->student_id,
-                            'enrollment_id' => $enrollment->enrollment_id,
-                            'component_id' => $classComp->component_id,
-                            'amount' => $amount,
-                            'selected_by' => $userId,
-                            'selected_at' => now(),
-                        ]);
-                    } else {
-                        $tuitionFeeApplied += $amount;
-                    }
-                }
-            }
-
-            // Sync legacy StudentFeeAccount record
-            $legacyBooksStatus = 'OUTSIDE';
-            if ($booksFeeApplied > 0) {
-                $legacyBooksStatus = 'SCHOOL';
-            }
-
-            StudentFeeAccount::create([
-                'enrollment_id' => $enrollment->enrollment_id,
-                'fee_structure_id' => $feeStructure->fee_structure_id,
-                'discount_amount' => 0,
-                'final_tuition_fee' => $tuitionFeeApplied,
-                'books_status' => $legacyBooksStatus,
-                'books_from_school' => ($legacyBooksStatus === 'SCHOOL'),
-                'books_decision_by' => $userId,
-                'books_decision_date' => now(),
-                'books_fee_applied' => $booksFeeApplied,
-                'books_fee' => $feeStructure->books_fee,
-                'net_fee' => $tuitionFeeApplied + $booksFeeApplied,
-                'previous_balance' => 0,
-                'waived_amount' => 0,
-                'total_due' => $tuitionFeeApplied + $booksFeeApplied,
-                'status' => 'UNPAID',
-            ]);
+            $enrollment = $this->enrollmentService->createEnrollmentWithFees(
+                $admission->student_id,
+                $admission->academic_year_id,
+                $admission->class_id,
+                $admission->section_id,
+                'NEW', // Assuming 'NEW' for initial admission finalization
+                'ACTIVE',
+                $userId,
+                $selectedComponents
+            );
 
             // 5. Activate Student
             $admission->student->update(['status' => 'ACTIVE']);
+
+            // 6. Update Admission Status to Admitted
+            $admission->update([
+                'admission_status' => Admission::STATUS_ADMITTED,
+                'admitted_at' => now(),
+                'admitted_by' => $userId,
+            ]);
 
             $this->logAction(
                 $userId,
@@ -677,5 +532,16 @@ class AdmissionService
             'new_value' => $newValue,
             'ip_address' => request()->ip(),
         ]);
+    }
+
+    /**
+     * Get enrollments that have no associated StudentFeeAccount.
+     */
+    public function getEnrollmentsWithMissingFeeAccounts(): \Illuminate\Database\Eloquent\Collection
+    {
+        return StudentEnrollment::whereDoesntHave('feeAccount')
+            ->where('status', 'ACTIVE') // Only active enrollments
+            ->with('student', 'academicYear', 'classRoom')
+            ->get();
     }
 }

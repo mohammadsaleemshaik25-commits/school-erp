@@ -103,12 +103,14 @@ class AdmissionController extends Controller
         $classes = ClassRoom::all();
         $academicYears = AcademicYear::all();
         
+        $enrollmentsWithMissingFeeAccounts = $this->admissionService->getEnrollmentsWithMissingFeeAccounts();
+
         // Initial page load with pagination
         $admissions = Admission::with(['student', 'academicYear', 'classRoom', 'section'])
             ->orderByDesc('created_at')
             ->paginate(20);
 
-        return view('admissions.index', compact('admissions', 'classes', 'academicYears'));
+        return view('admissions.index', compact('admissions', 'classes', 'academicYears', 'enrollmentsWithMissingFeeAccounts'));
     }
 
     /**
@@ -628,6 +630,43 @@ class AdmissionController extends Controller
             return redirect()->route('admissions.index')->with('success', 'Student record and all related data deleted successfully.');
         } catch (Exception $e) {
             return back()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Show the interface for repairing enrollments with missing fee accounts.
+     */
+    public function showMissingFeeAccountRepair()
+    {
+        $role = strtoupper(optional(auth()->user()->role)->role_name ?? '');
+        if (!in_array($role, ['ADMIN', 'ADMINISTRATOR', 'PRINCIPAL', 'CORRESPONDENT'])) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $enrollments = $this->admissionService->getEnrollmentsWithMissingFeeAccounts();
+
+        return view('admissions.repair_missing_fee_accounts', compact('enrollments'));
+    }
+
+    /**
+     * Repair a specific enrollment by creating its missing fee account.
+     */
+    public function repairMissingFeeAccount(Request $request)
+    {
+        $role = strtoupper(optional(auth()->user()->role)->role_name ?? '');
+        if (!in_array($role, ['ADMIN', 'ADMINISTRATOR', 'PRINCIPAL', 'CORRESPONDENT'])) {
+            return response()->json(['success' => false, 'error' => 'Unauthorized action.'], 403);
+        }
+
+        $request->validate([
+            'enrollment_id' => 'required|exists:student_enrollments,enrollment_id',
+        ]);
+
+        try {
+            $this->admissionService->repairMissingFeeAccount($request->enrollment_id, auth()->id());
+            return back()->with('success', 'Fee account repaired successfully for enrollment ID: ' . $request->enrollment_id);
+        } catch (Exception $e) {
+            return back()->with('error', 'Error repairing fee account: ' . $e->getMessage());
         }
     }
 }
