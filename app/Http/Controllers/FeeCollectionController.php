@@ -146,6 +146,12 @@ class FeeCollectionController extends Controller
         $storeComponents = FeeComponent::where('category', 'STORE')->where('status', 'ACTIVE')->get();
         $carryForwardComponents = FeeComponent::where('category', 'CARRY_FORWARD')->where('status', 'ACTIVE')->get();
 
+        // Get prices for optional items
+        $classFeeComponents = \App\Models\ClassFeeComponent::where('academic_year_id', $enrollment->academic_year_id)
+            ->where('class_id', $enrollment->class_id)
+            ->get()
+            ->keyBy('component_id');
+
         // Get payment history
         $payments = Payment::with('receipt', 'collector')
             ->where('account_id', $feeAccount->account_id)
@@ -157,42 +163,49 @@ class FeeCollectionController extends Controller
         $user = auth()->user();
         $canManagePreviousBalances = in_array(strtoupper($user->role->role_name ?? ''), ['PRINCIPAL', 'CORRESPONDENT', 'ADMIN', 'ADMINISTRATOR']);
         $tuitionAccounts = $componentAccounts->filter(function ($account) {
-    return $account->component &&
-        $account->component->category === 'TUITION';
+            return $account->component &&
+                $account->component->category === 'TUITION';
+        });
+
+        // Business Rule: BOOKS category includes Exam Fee, School Diary, etc.
+        $bookAccounts = $componentAccounts->filter(function ($account) {
+            if (!$account->component) return false;
+            
+            return $account->component->category === 'BOOKS' || 
+                   in_array($account->component->component_name, ['Exam Fee', 'School Diary', 'Note Books', 'Student File', 'Text Books']) ||
+                   in_array($account->component->component_code, ['EXAM', 'DIARY', 'NOTE', 'FILE', 'BOOKS']);
+        });
+
+        // Business Rule: STORE category includes Belt, Tie, T-Shirt
+       $otherAccounts = $componentAccounts->filter(function ($account) {
+
+    if (!$account->component) {
+        return false;
+    }
+
+    return $account->component->category === 'STORE';
 });
 
-$bookAccounts = $componentAccounts->filter(function ($account) {
-    return $account->component &&
-        $account->component->category === 'BOOKS';
-});
+        $previousAccounts = $componentAccounts->filter(function ($account) {
+            return $account->component &&
+                $account->component->category === 'CARRY_FORWARD';
+        });
 
-$otherAccounts = $componentAccounts->filter(function ($account) {
-    return in_array(
-        $account->component?->category,
-        ['STORE', 'ADMISSION']
-    );
-});
+        $tuitionSummary = [
+            'amount' => $tuitionAccounts->sum('amount'),
+            'concession' => $tuitionAccounts->sum('concession_amount'),
+            'paid' => $tuitionAccounts->sum('paid_amount'),
+            'balance' => $tuitionAccounts->sum('balance_amount'),
+        ];
 
-$previousAccounts = $componentAccounts->filter(function ($account) {
-    return $account->component &&
-        $account->component->category === 'CARRY_FORWARD';
-});
+        $bookSummary = [
+            'amount' => $bookAccounts->sum('amount'),
+            'concession' => $bookAccounts->sum('concession_amount'),
+            'paid' => $bookAccounts->sum('paid_amount'),
+            'balance' => $bookAccounts->sum('balance_amount'),
+        ];
 
-$tuitionSummary = [
-    'amount' => $tuitionAccounts->sum('amount'),
-    'concession' => $tuitionAccounts->sum('concession_amount'),
-    'paid' => $tuitionAccounts->sum('paid_amount'),
-    'balance' => $tuitionAccounts->sum('balance_amount'),
-];
-
-$bookSummary = [
-    'amount' => $bookAccounts->sum('amount'),
-    'concession' => $bookAccounts->sum('concession_amount'),
-    'paid' => $bookAccounts->sum('paid_amount'),
-    'balance' => $bookAccounts->sum('balance_amount'),
-];
-
-      return view('fees-collection.workspace', compact(
+        return view('fees-collection.workspace', compact(
     'student',
     'enrollment',
     'feeAccount',
@@ -202,6 +215,7 @@ $bookSummary = [
     'bookComponents',
     'storeComponents',
     'carryForwardComponents',
+    'classFeeComponents',
     'payments',
     'canManagePreviousBalances',
 
@@ -216,54 +230,114 @@ $bookSummary = [
     /**
      * Update book fee selections
      */
-    public function updateBookSelections(Request $request): JsonResponse
+    public function updateSelections(Request $request): JsonResponse
     {
         $request->validate([
             'enrollment_id' => 'required|integer|exists:student_enrollments,enrollment_id',
             'selections' => 'required|array',
             'selections.*.component_id' => 'required|integer|exists:fee_components,component_id',
-            'selections.*.selected' => 'required|boolean',
+            'selections.*.selected' => 'nullable',
             'selections.*.amount' => 'required|numeric|min:0',
         ]);
 
+        \Illuminate\Support\Facades\DB::beginTransaction();
+
         try {
             $enrollmentId = $request->enrollment_id;
+            $studentId = StudentEnrollment::where(
+            'enrollment_id',
+            $enrollmentId
+            )->value('student_id');
+            
             $selections = $request->selections;
             $userId = auth()->id();
 
             foreach ($selections as $selection) {
                 $componentId = $selection['component_id'];
-                $selected = $selection['selected'];
+                $selected = filter_var($selection['selected'], FILTER_VALIDATE_BOOLEAN);
                 $amount = $selection['amount'];
 
                 if ($selected) {
                     // Create or update selection
-                    StudentFeeComponentSelection::updateOrCreate(
-                        [
-                            'enrollment_id' => $enrollmentId,
-                            'component_id' => $componentId,
-                        ],
-                        [
-                            'amount' => $amount,
-                            'selected_by' => $userId,
-                            'selected_at' => now(),
-                        ]
-                    );
 
-                    // Ensure component account exists
-                    StudentFeeComponentAccount::updateOrCreate(
-                        [
-                            'enrollment_id' => $enrollmentId,
-                            'component_id' => $componentId,
-                        ],
-                        [
-                            'student_id' => StudentEnrollment::find($enrollmentId)->student_id,
-                            'amount' => $amount,
-                            'balance_amount' => $amount,
-                        ]
-                    );
+                  StudentFeeComponentSelection::updateOrCreate(
+                     [
+                        'enrollment_id' => $enrollmentId,
+                        'component_id' => $componentId,
+                     ],
+                     [
+                     'student_id' => $studentId, // Use variable from above
+                     'amount' => $amount,
+                     'selected_by' => $userId,
+                     'selected_at' => now(),
+                      ]
+                      );
+
+                    // Ensure component account exists WITHOUT resetting paid balances
+$componentAccount = StudentFeeComponentAccount::where(
+    'enrollment_id',
+    $enrollmentId
+)
+->where(
+    'component_id',
+    $componentId
+)
+->first();
+
+if (!$componentAccount) {
+
+    StudentFeeComponentAccount::create([
+        'student_id'      => $studentId,
+        'enrollment_id'   => $enrollmentId,
+        'component_id'    => $componentId,
+        'amount'          => $amount,
+        'paid_amount'     => 0,
+        'concession_amount' => 0,
+        'waiver_amount'   => 0,
+        'balance_amount'  => $amount,
+    ]);
+
+} else {
+
+    // If payments already exist, NEVER recreate balance
+    if (
+        $componentAccount->paid_amount > 0 ||
+        $componentAccount->concession_amount > 0 ||
+        $componentAccount->waiver_amount > 0
+    ) {
+
+        // Keep existing accounting untouched
+        continue;
+    }
+
+    // Only update unpaid components
+    $componentAccount->amount = $amount;
+    $componentAccount->balance_amount =
+        max(
+            0,
+            $amount
+            - $componentAccount->paid_amount
+            - $componentAccount->concession_amount
+            - $componentAccount->waiver_amount
+        );
+
+    $componentAccount->save();
+}
                 } else {
-                    // Remove selection
+                    // Deselection logic with safety check
+                    $componentAccount = StudentFeeComponentAccount::with('component')->where('enrollment_id', $enrollmentId)
+                        ->where('component_id', $componentId)
+                        ->first();
+
+                    if ($componentAccount) {
+                        if ($componentAccount->paid_amount > 0 || $componentAccount->concession_amount > 0 || $componentAccount->waiver_amount > 0) {
+                            throw new Exception("Cannot remove '{$componentAccount->component->component_name}' because transactions already exist.");
+                        }
+                        // Safe to delete the account
+                        $componentAccount->delete();
+                    }
+
+                    // Always delete the selection record
                     StudentFeeComponentSelection::where('enrollment_id', $enrollmentId)
                         ->where('component_id', $componentId)
                         ->delete();
@@ -273,12 +347,15 @@ $bookSummary = [
             // Recalculate fee account totals
             $this->recalculateFeeAccount($enrollmentId);
 
+            \Illuminate\Support\Facades\DB::commit();
+
             return response()->json([
                 'success' => true,
-                'message' => 'Book fee selections updated successfully.'
+                'message' => 'Fee selections updated successfully.'
             ]);
 
         } catch (Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Error updating selections: ' . $e->getMessage()
@@ -317,150 +394,246 @@ $bookSummary = [
      */
     public function collectPayment(Request $request): JsonResponse
     {
-        $request->validate([
-       
+        // Determine if the request is from the categorized workspace or the component-wise payment form
+        $isCategorizedPayment = $request->has('tuition_payment') || $request->has('books_payment') || $request->has('other_payment') || $request->has('previous_payment');
+        $isComponentWisePayment = $request->has('component_allocations');
+
+        if (!$isCategorizedPayment && !$isComponentWisePayment) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid payment request. No payment amounts or allocations provided.'
+            ], 400);
+        }
+
+        $rules = [
             'account_id' => 'required|integer|exists:student_fee_accounts,account_id',
-            'tuition_payment' => 'nullable|numeric|min:0',
-            'books_payment' => 'nullable|numeric|min:0',
-            'other_payment' => 'nullable|numeric|min:0',
-            'previous_payment' => 'nullable|numeric|min:0',
-            'payment_mode' => 'required|string|in:CASH,UPI',
+            'payment_mode' => 'required|string|in:CASH,UPI,NEFT,CHEQUE,CARD', // Added more modes from payment.blade.php
             'transaction_reference' => 'nullable|string|max:100',
             'remarks' => 'nullable|string|max:255',
-        ]);
-        if (
-    $request->payment_mode === 'UPI' &&
-    blank($request->transaction_reference)
-) {
-    return response()->json([
-        'success' => false,
-        'message' => 'UPI reference number is required.'
-    ], 422);
-}
+        ];
 
+        if ($isCategorizedPayment) {
+            $rules = array_merge($rules, [
+                'tuition_payment' => 'nullable|numeric|min:0',
+                'books_payment' => 'nullable|numeric|min:0',
+                'other_payment' => 'nullable|numeric|min:0',
+                'previous_payment' => 'nullable|numeric|min:0',
+                'store_component_ids' => 'nullable|string',
+            ]);
+        } elseif ($isComponentWisePayment) {
+            $rules = array_merge($rules, [
+                'component_allocations' => 'required|json',
+            ]);
+        }
+
+        $request->validate($rules);
+        
+        if ($request->payment_mode === 'UPI' && blank($request->transaction_reference)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'UPI reference number is required.'
+            ], 422);
+        }
+
+        \Illuminate\Support\Facades\DB::beginTransaction();
         try {
-            $totalAmount =
-    (float)$request->tuition_payment +
-    (float)$request->books_payment +
-    (float)$request->other_payment +
-    (float)$request->previous_payment;
-
-    if ($totalAmount <= 0) {
-    throw new \Exception('Payment amount must be greater than zero.');
-    }
-
-    $data = [
-        'account_id' => $request->account_id,
-        'amount' => $totalAmount,
-        'payment_mode' => $request->payment_mode,
-        'transaction_reference' => $request->transaction_reference,
-        'remarks' => $request->remarks,
-                ];
-
-            $feeAccount = StudentFeeAccount::with([
-            'enrollment.feeComponentAccounts.component'
-            ])->findOrFail($request->account_id);
-
+            $feeAccount = StudentFeeAccount::with(['enrollment'])->findOrFail($request->account_id);
             $allocations = [];
+            $totalAmount = 0;
 
-            $tuitionAmount = (float) $request->tuition_payment;
+            if ($isComponentWisePayment) {
+                // Handle component-wise allocations from payment.blade.php
+                $requestedAllocations = json_decode($request->component_allocations, true);
+                if (!is_array($requestedAllocations)) {
+                    throw new Exception('Invalid component allocations format.');
+                }
 
-if ($tuitionAmount > 0) {
+                foreach ($requestedAllocations as $allocation) {
+                    if (!isset($allocation['component_account_id']) || !isset($allocation['amount'])) {
+                        throw new Exception('Invalid allocation entry.');
+                    }
+                    $componentAccountId = $allocation['component_account_id'];
+                    $amount = (float) $allocation['amount'];
 
-    $tuitionAccounts = $feeAccount->enrollment
-        ->feeComponentAccounts
-        ->filter(function ($account) {
-            return $account->component &&
-                   $account->component->category === 'TUITION';
-        })
-        ->sortBy(function ($account) {
+                    if ($amount > 0) {
+                        $allocations[$componentAccountId] = $amount;
+                        $totalAmount += $amount;
+                    }
+                }
 
-            return match ($account->component->component_code) {
-                'TERM1' => 1,
-                'TERM2' => 2,
-                'TERM3' => 3,
-                default => 99
-            };
-        });
+                if ($totalAmount <= 0) {
+                    throw new Exception('Payment amount must be greater than zero.');
+                }
 
-    $remaining = $tuitionAmount;
+            } else { // $isCategorizedPayment from workspace.blade.php
+                $storeComponentIds = $request->filled('store_component_ids') ? array_map('intval', explode(',', $request->store_component_ids)) : [];
 
-    foreach ($tuitionAccounts as $account) {
+                // Process newly selected store items first
+                if (!empty($storeComponentIds)) {
+                    $classFeeComponents = \App\Models\ClassFeeComponent::where('academic_year_id', $feeAccount->enrollment->academic_year_id)
+                        ->where('class_id', $feeAccount->enrollment->class_id)
+                        ->whereIn('component_id', $storeComponentIds)
+                        ->get()
+                        ->keyBy('component_id');
 
-        if ($remaining <= 0) {
-            break;
-        }
+                    foreach ($storeComponentIds as $id) {
+                        $componentPrice = $classFeeComponents->get($id)->amount;
+                        if ($componentPrice === null) {
+                            throw new Exception("Price not found for store component ID: {$id}");
+                        }
 
-        if ($account->balance_amount <= 0) {
-            continue;
-        }
+                        // Find existing component account or create a new one
+                        $componentAccount = StudentFeeComponentAccount::where('enrollment_id', $feeAccount->enrollment->enrollment_id)
+                            ->where('component_id', $id)
+                            ->first();
 
-        $allocate = min(
-            $remaining,
-            (float)$account->balance_amount
-        );
+                        if (!$componentAccount) {
+                            // If it's a new store item selection, create a component account for it
+                            $componentAccount = StudentFeeComponentAccount::create([
+                                'enrollment_id' => $feeAccount->enrollment->enrollment_id,
+                                'student_id' => $feeAccount->enrollment->student_id,
+                                'component_id' => $id,
+                                'amount' => $componentPrice,
+                                'balance_amount' => $componentPrice,
+                                'status' => 'PENDING',
+                            ]);
+                        } else {
+                            // For repeatable store items, increment the amounts for the new purchase.
+                            // If it already had a balance, this adds the new purchase on top of it.
+                            $componentAccount->amount += $componentPrice;
+                            $componentAccount->balance_amount += $componentPrice;
+                            $componentAccount->status = 'PENDING'; // Ensure status is pending
+                            $componentAccount->save();
+                        }
+                    }
+                }
 
-        $allocations[$account->id] = $allocate;
+                // Reload fee account with all components, including newly created ones
+                $feeAccount->load('enrollment.feeComponentAccounts.component');
 
-        $remaining -= $allocate;
-    }
+                $tuitionAmount = (float) $request->tuition_payment;
+                if ($tuitionAmount > 0) {
+                    $tuitionAccounts = $feeAccount->enrollment
+                        ->feeComponentAccounts
+                        ->filter(function ($account) {
+                            return $account->component && $account->component->category === 'TUITION';
+                        })
+                        ->sortBy(function ($account) {
+                            return match ($account->component->component_code) {
+                                'TERM1' => 1, 'TERM2' => 2, 'TERM3' => 3, default => 99
+                            };
+                        });
 
-    if ($remaining > 0) {
-        throw new Exception(
-            'Tuition payment exceeds outstanding tuition balance.'
-        );
-    }
-}
+                    $remaining = $tuitionAmount;
+                    foreach ($tuitionAccounts as $account) {
+                        if ($remaining <= 0) break;
+                        if ($account->balance_amount <= 0) continue;
+                        $allocate = min($remaining, (float)$account->balance_amount);
+                        $allocations[$account->id] = ($allocations[$account->id] ?? 0) + $allocate;
+                        $remaining -= $allocate;
+                    }
+                    if ($remaining > 0) {
+                        throw new Exception('Tuition payment exceeds outstanding tuition balance.');
+                    }
+                }
 
-$booksAmount = (float) $request->books_payment;
+                $booksAmount = (float) $request->books_payment;
+                if ($booksAmount > 0) {
+                    $bookAccounts = $feeAccount->enrollment
+                        ->feeComponentAccounts
+                        ->filter(function ($account) {
+                            if (!$account->component) return false;
+                            return $account->component->category === 'BOOKS' || 
+                                   in_array($account->component->component_name, ['Exam Fee', 'School Diary', 'Note Books', 'Student File', 'Text Books']) ||
+                                   in_array($account->component->component_code, ['EXAM', 'DIARY', 'NOTE', 'FILE', 'BOOKS']);
+                        });
 
-if ($booksAmount > 0) {
+                    $remaining = $booksAmount;
+                    foreach ($bookAccounts as $account) {
+                        if ($remaining <= 0) break;
+                        if ($account->balance_amount <= 0) continue;
+                        $allocate = min($remaining, (float)$account->balance_amount);
+                        $allocations[$account->id] = ($allocations[$account->id] ?? 0) + $allocate;
+                        $remaining -= $allocate;
+                    }
+                    if ($remaining > 0) {
+                        throw new Exception('Books payment exceeds outstanding books balance.');
+                    }
+                }
 
-    $bookAccounts = $feeAccount->enrollment
-        ->feeComponentAccounts
-        ->filter(function ($account) {
-            return $account->component &&
-                   $account->component->category === 'BOOKS';
-        });
+                $otherAmount = (float) $request->other_payment; // This is the total other amount including newly added store items
+                if ($otherAmount > 0) {
+                    $otherAccounts = $feeAccount->enrollment
+                        ->feeComponentAccounts
+                        ->filter(function ($account) {
+                            if (!$account->component) return false;
+                            
+                            // Re-apply the same logic to exclude books
+                            $isBook = $account->component->category === 'BOOKS' || 
+                                     in_array($account->component->component_name, ['Exam Fee', 'School Diary', 'Note Books', 'Student File', 'Text Books']) ||
+                                     in_array($account->component->component_code, ['EXAM', 'DIARY', 'NOTE', 'FILE', 'BOOKS']);
+                            
+                            if ($isBook) return false;
 
-    $remaining = $booksAmount;
+                            return in_array($account->component->category, ['STORE', 'ADMISSION']) ||
+                                   in_array($account->component->component_name, ['Belt', 'Tie', 'T-Shirt']) ||
+                                   in_array($account->component->component_code, ['BELT', 'TIE', 'TSHIRT']);
+                        });
 
-    foreach ($bookAccounts as $account) {
+                    $remaining = $otherAmount;
+                    foreach ($otherAccounts as $account) {
+                        if ($remaining <= 0) break;
+                        if ($account->balance_amount <= 0) continue;
+                        $allocate = min($remaining, (float)$account->balance_amount);
+                        $allocations[$account->id] = ($allocations[$account->id] ?? 0) + $allocate;
+                        $remaining -= $allocate;
+                    }
+                    if ($remaining > 0) {
+                        throw new Exception('Other fees payment exceeds outstanding other fees balance.');
+                    }
+                }
 
-        if ($remaining <= 0) {
-            break;
-        }
+                $previousAmount = (float) $request->previous_payment;
+                if ($previousAmount > 0) {
+                    $previousAccounts = $feeAccount->enrollment
+                        ->feeComponentAccounts
+                        ->filter(function ($account) {
+                            return $account->component && $account->component->category === 'CARRY_FORWARD';
+                        });
 
-        if ($account->balance_amount <= 0) {
-            continue;
-        }
+                    $remaining = $previousAmount;
+                    foreach ($previousAccounts as $account) {
+                        if ($remaining <= 0) break;
+                        if ($account->balance_amount <= 0) continue;
+                        $allocate = min($remaining, (float)$account->balance_amount);
+                        $allocations[$account->id] = ($allocations[$account->id] ?? 0) + $allocate;
+                        $remaining -= $allocate;
+                    }
+                    if ($remaining > 0) {
+                        throw new Exception('Previous balance payment exceeds outstanding previous balance.');
+                    }
+                }
+                $totalAmount = (float)$request->tuition_payment + (float)$request->books_payment + (float)$request->other_payment + (float)$request->previous_payment;
+                if ($totalAmount <= 0) {
+                    throw new Exception('Payment amount must be greater than zero.');
+                }
+            }
 
-        $allocate = min(
-            $remaining,
-            (float)$account->balance_amount
-        );
-
-        $allocations[$account->id] =
-            ($allocations[$account->id] ?? 0)
-            + $allocate;
-
-        $remaining -= $allocate;
-    }
-
-    if ($remaining > 0) {
-        throw new Exception(
-            'Books payment exceeds outstanding books balance.'
-        );
-    }
-}
-            $data['collected_by'] = auth()->id();
-            $data['payment_date'] = now();
-
-            // Transform component_allocations from ['id' => ['amount' => 'value']] to ['component_account_id' => id, 'amount' => value]
-          $data['allocations'] = $allocations;
+            $data = [
+                'account_id' => $request->account_id,
+                'amount' => $totalAmount, // Use the calculated total amount
+                'payment_mode' => $request->payment_mode,
+                'transaction_reference' => $request->transaction_reference,
+                'remarks' => $request->remarks,
+                'collected_by' => auth()->id(),
+                'payment_date' => now(),
+                'allocations' => $allocations,
+            ];
 
             // Process payment through FinanceService
             $payment = $this->financeService->collectPayment($data, auth()->id());
+
+            \Illuminate\Support\Facades\DB::commit();
 
             return response()->json([
                 'success' => true,
@@ -470,6 +643,7 @@ if ($booksAmount > 0) {
             ]);
 
         } catch (Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Error collecting payment: ' . $e->getMessage()
@@ -511,20 +685,26 @@ if ($booksAmount > 0) {
                 ->firstOrFail();
 
             if ($action === 'waive') {
-                // Waive the balance
-                $componentAccount->waiver_amount = $componentAccount->balance_amount;
-                $componentAccount->balance_amount = 0;
-                $componentAccount->status = 'WAIVED';
-                $componentAccount->save();
+                // Use the finance service to create a formal adjustment
+                $this->financeService->requestAdjustment([
+                    'account_id' => $feeAccount->account_id,
+                    'component_id' => $componentId,
+                    'adjustment_type' => 'WAIVER',
+                    'discount_amount' => $componentAccount->balance_amount,
+                    'reason' => $reason,
+                ], $user->user_id, true); // Auto-approve
             } else {
-                // Close the balance (mark as paid)
-                $componentAccount->paid_amount += $componentAccount->balance_amount;
-                $componentAccount->balance_amount = 0;
-                $componentAccount->status = 'PAID';
-                $componentAccount->save();
+                // "Closing" is also a form of waiver for accounting purposes.
+                $this->financeService->requestAdjustment([
+                    'account_id' => $feeAccount->account_id,
+                    'component_id' => $componentId,
+                    'adjustment_type' => 'WAIVER',
+                    'discount_amount' => $componentAccount->balance_amount,
+                    'reason' => "Balance Closed: " . $reason,
+                ], $user->user_id, true); // Auto-approve
             }
 
-            // Recalculate fee account
+            // Recalculation is handled by the service, but we can trigger it again for safety.
             $this->recalculateFeeAccount($feeAccount->enrollment_id);
 
             return response()->json([
@@ -648,17 +828,6 @@ if ($booksAmount > 0) {
         
         $runningBalance = $totalCharges;
         $ledgerEntries = [];
-
-        // Initial Entry: Fee Charges
-        $ledgerEntries[] = [
-            'date' => $enrollment->created_at,
-            'type' => 'CHARGES',
-            'description' => 'Total Fee Charges for ' . $enrollment->academicYear->year_name,
-            'amount' => $totalCharges,
-            'running_balance' => $runningBalance,
-            'performed_by' => 'System',
-            'reference' => 'N/A'
-        ];
 
         foreach ($sortedTransactions as $tx) {
             if ($tx['raw_type'] === 'PAYMENT' || $tx['raw_type'] === 'CONCESSION' || $tx['raw_type'] === 'WAIVER') {

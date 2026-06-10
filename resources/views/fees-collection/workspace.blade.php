@@ -2,7 +2,41 @@
 
 @section('title', 'Fee Collection - Student Workspace')
 
+
 @section('content')
+@php
+    // Initialize all due categories
+    $tuitionDue = $tuitionSummary['balance'];
+    $booksDue = $bookSummary['balance'];
+    $previousDue = 0;
+    $otherFeeDue = 0;
+    $storePurchaseTotal = 0; // New variable for current store purchases
+    $selectedStoreItems = collect(); // New collection to hold selected store items for display
+
+    // Calculate Previous Due
+    foreach ($previousAccounts as $componentAccount) {
+        if ($componentAccount->balance_amount > 0) {
+            $previousDue += $componentAccount->balance_amount;
+        }
+    }
+
+    // Calculate Other Fee Due
+    // Iterate through all component accounts to find "other fees"
+    foreach ($otherAccounts as $componentAccount) {
+        
+
+        if ($componentAccount->balance_amount > 0) {
+            $otherFeeDue += $componentAccount->balance_amount;
+        }
+    }
+
+    // Total outstanding due (excluding current store purchases)
+    $totalCalculatedDue = $tuitionDue + $booksDue + $otherFeeDue + $previousDue;
+
+    // Initial values for JS auto-fill
+    $initialBooksDue = $booksDue;
+    $initialOtherFeeDue = $otherFeeDue; 
+@endphp
 <div class="container-fluid py-4">
     <!-- Header with Student Info -->
     <div class="card border-0 shadow-sm rounded-4 mb-4">
@@ -46,38 +80,38 @@
                         <a href="{{ route('fees-collection.ledger', $student->student_id) }}" class="btn btn-outline-dark rounded-pill px-4">
                             <i class="bi bi-journal-text me-2"></i>Student Ledger
                         </a>
-                        <a href="{{ route('fees-collection.concession-request', $student->student_id) }}" class="btn btn-outline-info rounded-pill px-4">
+                        <a href="{{ route('fees-collection.concession-request', ['studentId' => $student->student_id]) }}" class="btn btn-outline-info rounded-pill px-4">
                             <i class="bi bi-gift me-2"></i>Concession Request
                         </a>
                     </div>
                 </div>
-               <div class="col-auto">
-    <div class="text-end">
+                <div class="col-auto">
+    <div class="card border-0 shadow-sm rounded-4 p-3 bg-light">
+        <h6 class="fw-bold mb-3 text-dark">Outstanding Fee Summary</h6>
 
-        <div class="small text-muted">
-            Tuition Due
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted">Tuition Due</span>
+            <span class="fw-bold text-primary">₹{{ number_format($tuitionDue, 2) }}</span>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted">Books Due</span>
+            <span class="fw-bold text-info">₹{{ number_format($booksDue, 2) }}</span>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted">Other Fee Due</span>
+            <span class="fw-bold text-warning" id="otherFeeDueDisplay">₹{{ number_format($otherFeeDue, 2) }}</span>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+            <span class="text-muted">Previous Due</span>
+            <span class="fw-bold text-danger">₹{{ number_format($previousDue, 2) }}</span>
         </div>
 
-        <div class="fw-bold text-primary">
-            ₹{{ number_format($tuitionSummary['balance'],2) }}
+        <div class="bg-danger bg-opacity-10 p-3 rounded-3 text-center">
+            <div class="small text-muted text-uppercase fw-bold mb-1">Total Due</div>
+            <div class="h3 fw-bold text-danger mb-0" style="font-size: 28px;">
+                ₹{{ number_format($totalCalculatedDue, 2) }}
+            </div>
         </div>
-
-        <div class="small text-muted mt-2">
-            Books Due
-        </div>
-
-        <div class="fw-bold text-info">
-            ₹{{ number_format($bookSummary['balance'],2) }}
-        </div>
-
-        <div class="small text-muted mt-2">
-            Total Due
-        </div>
-
-        <div class="h3 fw-bold text-danger">
-            ₹{{ number_format($feeAccount->total_due,2) }}
-        </div>
-
     </div>
 </div>
         </div>
@@ -86,6 +120,16 @@
     <form id="paymentForm">
     @csrf
     <input type="hidden" name="account_id" value="{{ $feeAccount->account_id }}">
+    <input type="hidden" name="store_component_ids" id="store_component_ids" value=""> 
+    <input type="hidden" id="initialBooksDue" value="{{ number_format($initialBooksDue, 2, '.', '') }}">
+    <input type="hidden" id="initialOtherFeeDue" value="{{ number_format($initialOtherFeeDue, 2, '.', '') }}">
+
+    <div class="row g-4" id="fee-workspace">
+
+    <form id="paymentForm">
+    @csrf
+    <input type="hidden" name="account_id" value="{{ $feeAccount->account_id }}">
+    <input type="hidden" name="store_component_ids" id="store_component_ids" value="">
     <div class="row g-4" id="fee-workspace">
         <div class="col-lg-8">
             <div class="card border-0 shadow-sm rounded-4 mb-4">
@@ -254,9 +298,18 @@
                                         $account = $componentAccounts->get($component->component_id);
                                         $selection = $componentSelections->get($component->component_id);
                                         $isSelected = $selection !== null;
-                                        $amount = $account ? $account->amount : 0;
-                                        $paid = $account ? $account->paid_amount : 0;
-                                        $balance = $account ? $account->balance_amount : 0;
+
+                                        // Get the configured price for the component from ClassFeeComponent
+                                        // Assuming classFeeComponents always has an entry for active book components
+                                        $configuredPrice = $classFeeComponents->get($component->component_id)->amount ?? 0;
+
+                                        // Display amount: if an account exists, use its total amount, otherwise use the configured price
+                                        $amount = $account ? $account->amount : $configuredPrice;
+
+                                        // Display balance: if an account exists, use its balance, otherwise use the configured price
+                                        $balance = $account ? $account->balance_amount : $configuredPrice;
+
+                                        $isLocked = $account && ($account->paid_amount > 0 || $account->concession_amount > 0 || $account->waiver_amount > 0);
                                     @endphp
                                     <tr>
                                         <td>
@@ -264,11 +317,17 @@
                                                    data-component-id="{{ $component->component_id }}"
                                                    data-amount="{{ $amount }}"
                                                    {{ $isSelected ? 'checked' : '' }}
+                                                   {{ $isLocked ? 'disabled' : '' }}
                                                    onchange="updateBookSelection(this)">
                                         </td>
                                         <td>
                                             <div class="fw-bold">{{ $component->component_name }}</div>
                                             <div class="small text-muted">{{ $component->component_code }}</div>
+                                            @if($isLocked)
+                                                <div class="small text-danger fw-bold mt-1">
+                                                    <i class="bi bi-lock-fill"></i> Locked - Transactions exist
+                                                </div>
+                                            @endif
                                         </td>
                                         <td class="text-end">₹{{ number_format($amount, 2) }}</td>
                                         <td class="text-end text-danger fw-bold">₹{{ number_format($balance, 2) }}</td>
@@ -286,7 +345,9 @@
                         <div class="bg-warning bg-opacity-10 p-2 rounded-3 me-3">
                             <i class="bi bi-tag text-warning"></i>
                         </div>
-                        <h6 class="m-0 fw-bold text-dark">C. Other Fees</h6>
+                        <div>
+                            <h6 class="m-0 fw-bold text-dark">C. Store Items</h6>
+                        </div>
                     </div>
                 </div>
                 <div class="card-body">
@@ -294,47 +355,30 @@
                         <table class="table table-hover align-middle mb-0">
                             <thead class="bg-light text-muted small text-uppercase">
                                 <tr>
+                                    <th width="50">Select</th>
                                     <th>Component</th>
                                     <th class="text-end">Amount</th>
-                                    <th class="text-end text-danger">Balance</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach($storeComponents as $component)
                                     @php
-                                        $account = $componentAccounts->get($component->component_id);
-                                        $amount = $account ? $account->amount : 0;
-                                        $paid = $account ? $account->paid_amount : 0;
-                                        $balance = $account ? $account->balance_amount : 0;
+                                        $classFeeComponent = $classFeeComponents->get($component->component_id);
+                                        $price = $classFeeComponent ? $classFeeComponent->amount : 0;
                                     @endphp
-                                    @if($balance > 0)
                                     <tr>
+                                        <td>
+                                            <input type="checkbox" class="form-check-input store-item-checkbox" 
+                                                   data-component-id="{{ $component->component_id }}"
+                                                   data-price="{{ $price }}"
+                                                   onchange="updateStoreItemSelection()">
+                                        </td>
                                         <td>
                                             <div class="fw-bold">{{ $component->component_name }}</div>
                                             <div class="small text-muted">{{ $component->component_code }}</div>
                                         </td>
-                                        <td class="text-end">₹{{ number_format($amount, 2) }}</td>
-                                        <td class="text-end text-danger fw-bold">₹{{ number_format($balance, 2) }}</td>
+                                        <td class="text-end fw-bold">₹{{ number_format($price, 2) }}</td>
                                     </tr>
-                                    @endif
-                                @endforeach
-                                @foreach($tuitionComponents->whereIn('component_code', ['ADMISSION']) as $component)
-                                    @php
-                                        $account = $componentAccounts->get($component->component_id);
-                                        $amount = $account ? $account->amount : 0;
-                                        $paid = $account ? $account->paid_amount : 0;
-                                        $balance = $account ? $account->balance_amount : 0;
-                                    @endphp
-                                    @if($balance > 0)
-                                    <tr>
-                                        <td>
-                                            <div class="fw-bold">{{ $component->component_name }}</div>
-                                            <div class="small text-muted">{{ $component->component_code }}</div>
-                                        </td>
-                                        <td class="text-end">₹{{ number_format($amount, 2) }}</td>
-                                        <td class="text-end text-danger fw-bold">₹{{ number_format($balance, 2) }}</td>
-                                    </tr>
-                                    @endif
                                 @endforeach
                             </tbody>
                         </table>
@@ -363,6 +407,7 @@
                                     <th class="text-end">Amount</th>
                                     <th class="text-end text-danger">Balance</th>
                                     @if($canManagePreviousBalances)
+                                    <th class="text-center">Actions</th>
                                     @endif
                                 </tr>
                             </thead>
@@ -388,6 +433,14 @@
     <td class="text-end text-danger fw-bold">
         ₹{{ number_format($balance, 2) }}
     </td>
+    @if($canManagePreviousBalances)
+    <td class="text-center">
+        @if($balance > 0)
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="closePreviousBalance({{ $feeAccount->account_id }}, {{ $component->component_id }}, 'waive')">Waive</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="closePreviousBalance({{ $feeAccount->account_id }}, {{ $component->component_id }}, 'close')">Close</button>
+        @endif
+    </td>
+    @endif
 </tr>
 @endif
                                 @endforeach
@@ -453,7 +506,7 @@
                name="books_payment"
                min="0"
                step="0.01"
-               value="0">
+               value="{{ number_format($initialBooksDue, 2, '.', '') }}">
     </div>
 </div>
 
@@ -471,7 +524,7 @@
                name="other_payment"
                min="0"
                step="0.01"
-               value="0">
+               value="{{ number_format($initialOtherFeeDue, 2, '.', '') }}">
     </div>
 </div>
 
@@ -491,6 +544,7 @@
                             value="0">
                        </div>
                     </div>
+
 
                     <div class="mb-4">
                         <label class="form-label fw-bold">Payment Mode</label>
@@ -516,7 +570,7 @@
                     <div class="mb-4">
                         <div class="d-flex justify-content-between mb-2">
                             <span class="text-muted">Total Due</span>
-                            <span class="fw-bold text-danger">₹{{ number_format($feeAccount->total_due, 2) }}</span>
+                            <span class="fw-bold text-danger">₹{{ number_format($totalCalculatedDue, 2) }}</span>
                         </div>
                         <div class="d-flex justify-content-between mb-2">
                             <span class="text-muted">Paying Now</span>
@@ -524,12 +578,12 @@
                         </div>
                         <div class="d-flex justify-content-between">
                             <span class="fw-bold">Remaining After Payment</span>
-                            <span class="fw-bold text-danger" id="remainingAfter">₹{{ number_format($feeAccount->total_due, 2) }}</span>
+                            <span class="fw-bold text-danger" id="remainingAfter">₹{{ number_format($totalCalculatedDue, 2) }}</span>
                         </div>
                     </div>
 
-                    <button type="button" onclick="submitPayment()" 
-                            class="btn btn-primary w-100 rounded-pill py-3" id="submitBtn" {{ $feeAccount->total_due <= 0 ? 'disabled' : '' }}>
+                    <button type="button" onclick="submitPayment()"
+                            class="btn btn-primary w-100 rounded-pill py-3" id="submitBtn" {{ $totalCalculatedDue <= 0 ? 'disabled' : '' }}>
                         <i class="bi bi-cash-stack me-2"></i> Collect Payment
                     </button>
                 </div>
@@ -552,7 +606,7 @@
                                         <div class="text-end">
                                             <span class="badge bg-success">{{ $payment->payment_mode }}</span>
                                             @if($payment->receipt)
-                                                <a href="{{ route('fees.receipts.show', $payment->receipt->receipt_id) }}" 
+                                                <a href="{{ route('fees.receipts.show', ['receipt' => $payment->receipt->receipt_id]) }}" 
                                                    class="btn btn-sm btn-link p-0 text-primary" target="_blank">
                                                     <i class="bi bi-receipt"></i>
                                                 </a>
@@ -586,7 +640,7 @@
         <a href="{{ route('fees-collection.index') }}" class="btn btn-outline-secondary rounded-pill px-4">
             <i class="bi bi-arrow-left me-2"></i> Back to Search
         </a>
-        <a href="{{ route('fees.ledger', $feeAccount->account_id) }}" class="btn btn-outline-secondary rounded-pill px-4"> <i class="bi bi-journal-text me-2"></i> View Full Ledger </a>
+        <a href="{{ route('fees-collection.ledger', $student->student_id) }}" class="btn btn-outline-secondary rounded-pill px-4"> <i class="bi bi-journal-text me-2"></i> View Full Ledger </a>
     </div>
 </div>
 @endsection
@@ -594,17 +648,34 @@
 @push('scripts')
 <script>
 function toggleAllBooks(checkbox) {
-    $('.book-checkbox').prop('checked', checkbox.checked).change();
+    toggleAll(checkbox, '.book-checkbox');
 }
 
-function updateBookSelection(checkbox) {
-    // Update visual feedback
+function toggleAll(checkbox, selector) {
+    $(selector).prop('checked', checkbox.checked).trigger('change');
+}
+
+function updateRowSelection(checkbox) {
+    if (!checkbox) return;
     const row = $(checkbox).closest('tr');
     if (checkbox.checked) {
         row.addClass('table-primary');
     } else {
         row.removeClass('table-primary');
     }
+}
+
+function updateBookSelection(checkbox) {
+    if (checkbox) {
+        updateRowSelection(checkbox);
+    }
+    
+    let totalSelectedBooks = 0;
+    $('.book-checkbox:checked').each(function() {
+        totalSelectedBooks += parseFloat($(this).data('amount')) || 0;
+    });
+
+    updatePaymentSummary();
 }
 
 
@@ -622,7 +693,6 @@ window.submitPayment = function() {
         books +
         other +
         previous;
-
     if (total <= 0) {
         Swal.fire({
             icon: 'warning',
@@ -683,10 +753,7 @@ window.submitPayment = function() {
                     result.isConfirmed &&
                     response.receipt_id
                 ) {
-                   window.open(
-                       '/receipts/' + response.receipt_id,
-                      '_blank'
-                    );
+                   window.open("{{ url('receipts') }}/" + response.receipt_id, '_blank');
                 }
 
                 location.reload();
@@ -725,7 +792,7 @@ function saveBookSelections() {
     const saveBtn = $('.btn-primary:contains("Save Selections")');
     const originalHtml = saveBtn.html();
     saveBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...');
-
+    
     $.ajax({
         url: '{{ route("fees-collection.update-selections") }}',
         type: 'POST',
@@ -753,6 +820,35 @@ function saveBookSelections() {
             saveBtn.prop('disabled', false).html(originalHtml);
         }
     });
+}
+
+function updateStoreItemSelection() {
+    let currentSelectedStoreItemsTotal = 0;
+    const initialOtherFeeDue = parseFloat($('#initialOtherFeeDue').val()) || 0;
+    const selectedStoreComponentIds = [];
+
+    // Iterate over selected store item checkboxes
+    $('.store-item-checkbox:checked:not(:disabled)').each(function() {
+        const price = parseFloat($(this).data('price')) || 0;
+        const componentId = $(this).data('component-id');
+        currentSelectedStoreItemsTotal += price;
+        selectedStoreComponentIds.push(componentId);
+
+        $(this).closest('tr').addClass('table-primary');
+    });
+
+    // Remove highlight from unselected items
+    $('.store-item-checkbox:not(:checked)').each(function() {
+        $(this).closest('tr').removeClass('table-primary');
+    });
+    
+    
+    $('#other_payment').val(currentSelectedStoreItemsTotal.toFixed(2));
+    $('#otherFeeDueDisplay').text('₹' + currentSelectedStoreItemsTotal.toFixed(2));
+    $('#store_component_ids').val(selectedStoreComponentIds.join(',')); // Keep this for backend to know which store items were selected
+
+    // Trigger summary update
+    updatePaymentSummary();
 }
 
 function closePreviousBalance(accountId, componentId, action) {
@@ -819,42 +915,71 @@ function closePreviousBalance(accountId, componentId, action) {
 // Initialize selected book rows
 function updatePaymentSummary() {
 
-    const tuition =
-        parseFloat($('#tuition_payment').val()) || 0;
+    const tuition = parseFloat($('#tuition_payment').val()) || 0;
+    const books = parseFloat($('#books_payment').val()) || 0;
+    const otherFees = parseFloat($('#other_payment').val()) || 0;
+    const previous = parseFloat($('#previous_payment').val()) || 0;
 
-    const books =
-        parseFloat($('#books_payment').val()) || 0;
+    // Total payment being collected now
+    const totalPayingNow =
+        tuition +
+        books +
+        otherFees +
+        previous;
 
-    const other =
-        parseFloat($('#other_payment').val()) || 0;
+    // Store items selected right now
+    const selectedStoreCharges = otherFees;
 
-    const previous =
-        parseFloat($('#previous_payment').val()) || 0;
+    // New book selections not already part of outstanding balance
+    const selectedBookCharges = Math.max(
+        0,
+        books - (parseFloat($('#initialBooksDue').val()) || 0)
+    );
 
-    const total =
-        tuition + books + other + previous;
+    // Effective Due
+    const effectiveDue =
+        {{ $totalCalculatedDue }} +
+        selectedStoreCharges +
+        selectedBookCharges;
 
-    $('#payingNow').text('₹' + total.toFixed(2));
+    // Remaining balance
+    const remainingAfter =
+        effectiveDue - totalPayingNow;
+
+    $('#payingNow').text(
+        '₹' + totalPayingNow.toFixed(2)
+    );
 
     $('#remainingAfter').text(
-        '₹' +
-        (
-            {{ $feeAccount->total_due }} - total
-        ).toFixed(2)
+        '₹' + remainingAfter.toFixed(2)
     );
 }
-
 $('#tuition_payment').on('input', updatePaymentSummary);
 $('#books_payment').on('input', updatePaymentSummary);
 $('#other_payment').on('input', updatePaymentSummary);
 $('#previous_payment').on('input', updatePaymentSummary);
+// New: Listen for changes on store item checkboxes
+$('.store-item-checkbox').on('change', updateStoreItemSelection);
 
 $(document).ready(function () {
+    $('.book-checkbox:checked').each(function() {
+        $(this).closest('tr').addClass('table-primary');
+    });
 
-    $('.book-checkbox:checked')
-        .closest('tr')
-        .addClass('table-primary');
+    // Clear store item selections on page load (only for those not already billed)
+    $('.store-item-checkbox').prop('checked', false);
+    $('#books_payment').val('0.00');
+    $('#other_payment').val('0.00');
+    $('#previous_payment').val('0.00');
 
+    $('#otherFeeDueDisplay').text('₹0.00');
+    
+    
+    // Initial calculation for any pre-selected items
+    // Do not auto-calculate payments on page load
+    // User must manually select items
+    
+    // Ensure summary is updated
     updatePaymentSummary();
 });
 </script>

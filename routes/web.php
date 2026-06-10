@@ -54,12 +54,12 @@ Route::middleware(['auth', 'active'])->group(function () {
         // New Fee Collection Workflow
         Route::prefix('fees-collection')->group(function () {
             Route::get('/ledger/{studentId}',[FeeCollectionController::class, 'ledger'])->name('fees-collection.ledger');
-            Route::get('/concession-request/{studentId}',[FeeCollectionController::class, 'concessionRequest'])->name('fees-collection.concession-request');
+            Route::get('/concession-request/{studentId}', [FeeCollectionController::class, 'concessionRequest'])->name('fees-collection.concession-request');
             Route::post('/concession-request',[FeeCollectionController::class, 'storeConcessionRequest'])->name('fees-collection.concession-request.store');
             Route::get('/', [FeeCollectionController::class, 'index'])->name('fees-collection.index');
             Route::get('/search', [FeeCollectionController::class, 'search'])->name('fees-collection.search');
             Route::get('/workspace/{studentId}', [FeeCollectionController::class, 'workspace'])->name('fees-collection.workspace');
-            Route::post('/update-selections', [FeeCollectionController::class, 'updateBookSelections'])->name('fees-collection.update-selections');
+            Route::post('/update-selections', [FeeCollectionController::class, 'updateSelections'])->name('fees-collection.update-selections');
             Route::get('/payment/{accountId}', [FeeCollectionController::class, 'showPaymentForm'])->name('fees-collection.payment');
             Route::post('/collect-payment', [FeeCollectionController::class, 'collectPayment'])->name('fees-collection.collect-payment');
             Route::post('/close-previous-balance', [FeeCollectionController::class, 'closePreviousBalance'])->name('fees-collection.close-previous-balance');
