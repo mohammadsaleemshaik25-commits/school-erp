@@ -10,6 +10,7 @@ use App\Models\ClassRoom;
 use App\Models\Section;
 use App\Models\AcademicYear;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Exception;
@@ -130,9 +131,19 @@ class AdmissionBulkImportController extends Controller
 
     private function parseExcelFile($file)
     {
-        // Simple Excel parsing - in production, use PhpSpreadsheet
-        // For now, return empty array as placeholder
-        return [];
+        $sheets = Excel::toArray([], $file);
+
+        if (empty($sheets) || !isset($sheets[0])) {
+            return [];
+        }
+
+        $rows = $sheets[0];
+
+        if (!empty($rows)) {
+            array_shift($rows); // Remove header row
+        }
+
+        return $rows;
     }
 
     private function validateRecord($record)
