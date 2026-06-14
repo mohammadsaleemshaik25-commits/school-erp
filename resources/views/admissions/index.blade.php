@@ -15,9 +15,10 @@
             <a href="{{ route('admissions.create') }}" class="btn btn-primary shadow-sm px-4 rounded-pill">
                 <i class="bi bi-plus-lg me-2"></i> New Admission
             </a>
-            <button class="btn btn-outline-secondary px-4 rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#importModal">
-                <i class="bi bi-file-earmark-excel me-2"></i> Bulk Import
-            </button>
+            <a href="{{ route('admissions.bulk.index') }}"
+                 class="btn btn-outline-secondary px-4 rounded-pill shadow-sm">
+                  <i class="bi bi-file-earmark-excel me-2"></i> Bulk Import
+            </a>
         </div>
     </div>
 
@@ -284,4 +285,6 @@
     });
 </script>
 @endpush
+
+
 @endsection

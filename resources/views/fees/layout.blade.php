@@ -84,9 +84,7 @@
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
         </div>
         <div class="offcanvas-body p-0 d-flex flex-column h-100">
-            <div class="p-4 d-none d-lg-block">
-                <div class="small text-muted text-uppercase fw-bold mb-3" style="font-size: 0.7rem; letter-spacing: 1px;">Navigation</div>
-            </div>
+           <div class="pt-3"></div>
             <nav class="nav flex-column px-3 pb-4">
                 @php $role = strtoupper(optional(auth()->user()->role)->role_name ?? ''); @endphp
 

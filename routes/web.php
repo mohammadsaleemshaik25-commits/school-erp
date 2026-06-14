@@ -208,5 +208,9 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/sections', [SectionController::class, 'store']);
         Route::get('/sections/{section}/edit', [SectionController::class, 'edit']);
         Route::put('/sections/{section}', [SectionController::class, 'update']);
+
+
+       
+
     });
 });

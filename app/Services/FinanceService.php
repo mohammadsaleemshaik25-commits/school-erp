@@ -178,6 +178,9 @@ class FinanceService
                 $feeAccount->discount_amount = $discountAmount;
                 $feeAccount->waived_amount = $waivedAmount;
                 $feeAccount->recalculateTotals();
+                $feeAccount->total_due = $feeAccount->enrollment
+                        ->feeComponentAccounts()
+                        ->sum('balance_amount');
                 $feeAccount->save();
 
                 $this->logAction(

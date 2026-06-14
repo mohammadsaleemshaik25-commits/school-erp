@@ -10,9 +10,10 @@ use App\Models\ClassRoom;
 use App\Models\Section;
 use App\Models\AcademicYear;
 use Illuminate\Support\Facades\DB;
-use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use App\Models\AuditLog;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Exception;
 
 class AdmissionBulkImportController extends Controller
@@ -107,7 +108,7 @@ class AdmissionBulkImportController extends Controller
                 'pen_no' => $row[26] ?? '',
                 'photo_file_name' => $row[27] ?? '',
             ];
-
+            
             $errors = $this->validateRecord($record);
 
             if (empty($errors)) {
@@ -129,28 +130,34 @@ class AdmissionBulkImportController extends Controller
         return view('admissions.bulk.preview', compact('results'));
     }
 
+   
+
     private function parseExcelFile($file)
-    {
-        $sheets = Excel::toArray([], $file);
+{
+    $spreadsheet = IOFactory::load($file->getRealPath());
 
-        if (empty($sheets) || !isset($sheets[0])) {
-            return [];
-        }
+    $sheet = $spreadsheet->getActiveSheet();
 
-        $rows = $sheets[0];
+    $rows = $sheet->toArray();
 
-        if (!empty($rows)) {
-            array_shift($rows); // Remove header row
-        }
+    array_shift($rows); // Remove header row
 
-        return $rows;
-    }
+    return $rows;
+}
 
     private function validateRecord($record)
     {
         $errors = [];
 
-        if (empty($record['student_name'])) $errors[] = "Missing Student Name";
+    if (empty($record['student_name'])) $errors[] = "Missing Student Name";
+    if (!empty($record['pen_no'])) {
+    if (Student::where('pen_no', $record['pen_no'])->exists()) {
+        $errors[] = "PEN Number already exists";
+    }}
+    if (empty($record['father_name'])) $errors[] = "Missing Father Name";
+    if (empty($record['mother_name'])) $errors[] = "Missing Mother Name";
+    if (empty($record['phone_primary'])) $errors[] = "Missing Primary Phone Number";
+    if (empty($record['address'])) $errors[] = "Missing Address";
         if (!in_array($record['gender'], ['MALE', 'FEMALE', 'OTHER'])) $errors[] = "Invalid Gender (Use MALE/FEMALE/OTHER)";
         
         // Validate Date
@@ -176,6 +183,21 @@ class AdmissionBulkImportController extends Controller
                 $errors[] = "Duplicate Aadhaar Number";
             }
         }
+
+        // Validate email format
+        $email = trim($record['email'] ?? '');
+
+        if ($email !== '' &&
+            $email !== '-' &&
+           strtoupper($email) !== 'N/A' &&
+           !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+           $errors[] = "Invalid Email format";
+        }
+        // Validate phone_primary format (simple numeric check)
+        if (!empty($record['phone_primary']) && !preg_match('/^\d{10,15}$/', $record['phone_primary'])) {
+            $errors[] = "Invalid Primary Phone Number format (10-15 digits)";
+            }
+        
 
         return $errors;
     }
@@ -248,17 +270,34 @@ class AdmissionBulkImportController extends Controller
                     'photo_path' => $photoPath,
                 ]);
 
-                Admission::create([
+                $admission = Admission::create([
                     'student_id' => $student->student_id,
                     'academic_year_id' => $ay->academic_year_id,
                     'class_id' => $class->class_id,
                     'section_id' => $section->section_id ?? null,
-                    'admission_status' => 'SUBMITTED',
+                    'admission_status' => \App\Models\Admission::STATUS_APPROVED, // Set to APPROVED for immediate finalization
                     'created_by' => auth()->id(),
                 ]);
 
+                // Finalize admission to create enrollment and fee accounts
+                $admissionService->finalizeAdmission(
+                    $admission->admission_id,
+                    \App\Models\StudentFeeAccount::BOOKS_SCHOOL, // Default books decision
+                    auth()->id(),
+                    ['TEXTBOOK', 'NOTEBOOK', 'EXAM', 'DIARY', 'FILE'] // Default components
+                );
+
                 $imported++;
             }
+
+            AuditLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'BULK_ADMISSION_IMPORTED',
+                'table_name' => 'students',
+                'record_id' => null, // No single record ID for bulk action
+                'new_value' => "Successfully imported {$imported} students via bulk upload.",
+                'ip_address' => $request->ip(),
+            ]);
 
             // Clean up temp photo folder
             if ($photoFolderPath) {

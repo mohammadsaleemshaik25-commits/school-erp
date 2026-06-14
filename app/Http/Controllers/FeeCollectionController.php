@@ -81,11 +81,11 @@ class FeeCollectionController extends Controller
         if (!empty($academicYearId)) {
             $query->where('student_enrollments.academic_year_id', $academicYearId);
         }
-
-        $students = $query->orderByDesc('academic_years.start_date')
-            ->limit(20)
-            ->get()
-            ->unique('student_id'); // Remove duplicates if student has multiple enrollments
+        $students = $query
+    ->orderByDesc('student_enrollments.enrollment_id')
+    ->get()
+    ->unique('student_id')
+    ->values();
 
         return response()->json($students->map(function ($student) {
             return [
